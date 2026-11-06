@@ -124,8 +124,19 @@ gateway not restarted (do the restart directive, retest P1).
 7. Prove: gateway chat call of kev_decide + one message where the ⚡ advisory
    fires with nobody mentioning kev; trail in `plugins-data/nexa-kev/decisions.jsonl`.
 
-## Memory-bank routing (v0.3.0, shared vs private)
+## Where the audit trail lives (surface-aware)
 
+`decisions.jsonl` is written by the PROCESS serving the session, into ITS
+Hermes home: gateway-served/CLI sessions under
+`~/.hermes/profiles/<profile>/plugins-data/nexa-kev/`, while multi-profile
+processes like hermes-webui (which boot at the HOST root) write to
+`~/.hermes/plugins-data/nexa-kev/`. When verifying a surface, check BOTH
+locations (`find ~/.hermes -path "*plugins-data/nexa-kev/decisions.jsonl"
+-newermt -10min`). Every advisory attempt now logs `outcome:"fired"` even
+when the injection stays silent, so "hook never ran" is distinguishable
+from "kev honestly stayed quiet".
+
+## Memory-bank routing (v0.3.0, shared vs private)
 `pre_tool_call` hook (`memroute.py`) gates SAVES into shared banks
 (`mnemosyne_shared_remember[_canonical]`, `mnemosyne_remember_canonical`):
 1. hard secret-pattern gate (regex, no kev): credentials never hit the

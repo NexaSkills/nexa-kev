@@ -176,6 +176,8 @@ def pre_llm_call(**kwargs) -> Optional[Dict[str, str]]:
         if len(routed) > 200:
             routed.clear()
         routed[msg_hash] = True
+        _log_decision(cfg, kind="advisory", outcome="fired",
+                      msg=user_message[:60], session=session_key[-24:])
 
         skills = _load_skills()
         tools = _load_tools()
