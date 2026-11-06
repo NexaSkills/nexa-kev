@@ -1,0 +1,234 @@
+"""advisory — pre_llm_call auto-routing for nexa-kev (no user mention needed).
+
+Fires once per distinct user message per session: asks kev two `choice`
+questions in ONE gateway request (best skill to load, best first tool),
+then injects a one-line advisory into the turn context. Fail-open
+everywhere: any error, timeout, or kev outage yields a silent None and the
+turn proceeds untouched.
+
+Conventions borrowed from kev-router (structure, not code): once-per-
+message dedup, compact state, echo marker first, never-raise hooks.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import logging
+import re
+import time
+from typing import Any, Dict, Optional
+
+try:
+    from . import config as _config
+    from . import kev_decide as _kd
+except ImportError:  # pragma: no cover - flat dev loading
+    import config as _config  # type: ignore
+    import kev_decide as _kd  # type: ignore
+
+logger = logging.getLogger("hermes.plugins.nexa-kev")
+
+# session_key -> {msg_hash: True}; bounded.
+_routed: Dict[str, Dict[str, bool]] = {}
+
+
+def _load_skills() -> Dict[str, str]:
+    """skill_name -> short description (host prompt builder first, dir scan fallback)."""
+    skills: Dict[str, str] = {}
+    try:
+        from agent.prompt_builder import build_skills_system_prompt  # type: ignore
+        prompt = build_skills_system_prompt()
+        if prompt:
+            for line in prompt.splitlines():
+                m = re.match(r"^\s*(?:-\s+|\d+\.\s*)([A-Za-z0-9_\-]+):\s*(.+)$", line)
+                if m:
+                    skills[m.group(1)] = m.group(2).strip()[:110]
+            if skills:
+                return skills
+    except Exception:
+        pass
+    # Fallback: scan this profile's skills dirs for SKILL.md frontmatter names.
+    try:
+        from pathlib import Path
+        roots = []
+        try:
+            from hermes_constants import get_hermes_home
+            roots.append(Path(get_hermes_home()) / "skills")
+        except Exception:
+            pass
+        import os
+        roots.append(Path(os.path.expanduser("~/.hermes/skills")))
+        seen = set()
+        for root in roots:
+            if not root.is_dir() or str(root) in seen:
+                continue
+            seen.add(str(root))
+            for md in root.glob("*/SKILL.md"):
+                try:
+                    text = md.read_text(encoding="utf-8", errors="replace")[:1500]
+                    nm = re.search(r"^name:\s*(.+)$", text, re.M)
+                    ds = re.search(r"^description:\s*(.+)$", text, re.M)
+                    if nm:
+                        skills[nm.group(1).strip()] = (ds.group(1).strip() if ds else "")[:110]
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return skills
+
+
+def _load_tools() -> Dict[str, str]:
+    """tool_name -> short description, from the live registry (union-safe: an
+    advisory naming an unavailable tool is simply ignored by the model)."""
+    tools: Dict[str, str] = {}
+    try:
+        from tools.registry import registry
+        for d in registry.get_definitions(registry.get_all_tool_names(), quiet=True):
+            fn = d.get("function") or {}
+            name = fn.get("name")
+            if name:
+                tools[name] = (fn.get("description") or "").strip().replace("\n", " ")[:110]
+    except Exception:
+        pass
+    return tools
+
+
+def _hint(prefix: str, probs: Dict[str, float], cfg) -> str:
+    ranked = sorted(((k, v) for k, v in (probs or {}).items()
+                     if k != "none" and isinstance(v, (int, float))
+                     and v >= cfg.advisory_min),
+                    key=lambda kv: -kv[1])[:cfg.advisory_max_items]
+    if not ranked:
+        return ""
+    return prefix + ", ".join(f"{k} ({v:.2f})" for k, v in ranked)
+
+
+def _hint_rel(prefix: str, probs: Dict[str, float], cfg) -> str:
+    """Relative-confidence fallback: with N options the uniform baseline is
+    1/N, so a top pick >= advisory_rel_min x uniform IS informative even when
+    the absolute prob looks small (softmax dilution over large catalogs)."""
+    vals = [(k, v) for k, v in (probs or {}).items()
+            if k != "none" and isinstance(v, (int, float))]
+    if not vals:
+        return ""
+    n = len(vals) + 1
+    top_k, top_v = max(vals, key=lambda kv: kv[1])
+    if top_v * n < cfg.advisory_rel_min:
+        return ""
+    ranked = sorted(vals, key=lambda kv: -kv[1])[:cfg.advisory_max_items]
+    return prefix + ", ".join(
+        f"{k} ({v:.2f})" for k, v in ranked if v * n >= cfg.advisory_rel_min or k == top_k)
+
+
+_STOP = {"the", "with", "from", "into", "that", "this", "your", "have", "what",
+         "which", "when", "then", "them", "there", "these", "those", "using",
+         "would", "should", "could", "about", "after", "before", "please", "and",
+         "for", "are", "was", "were", "been", "being", "its", "you", "can",
+         "will", "not", "but", "all", "any", "get", "let", "put", "out", "how"}
+
+
+def _prefilter(text: str, items: Dict[str, str], cap: int) -> Dict[str, str]:
+    """Cap the criteria set for kev's per-question token limit: rank items by
+    crude lexical overlap with the task (name+description vs message words),
+    keep top `cap`. Deterministic: score desc, then name asc. 'none' is added
+    by the caller, not here."""
+    if len(items) <= cap:
+        return items
+    words = {w for w in "".join(c if c.isalnum() else " " for c in text.lower()).split()
+             if len(w) >= 3 and w not in _STOP}
+    scored = []
+    for name, desc in items.items():
+        hay = (name + " " + (desc or "")).lower().replace("_", " ").replace("-", " ")
+        toks = {w for w in "".join(c if c.isalnum() else " " for c in hay).split()}
+        score = len(words & toks)
+        scored.append((-score, name))
+    scored.sort()
+    return {name: items[name] for _, name in scored[:cap]}
+
+
+def _log_decision(cfg: Any, **entry: Any) -> None:
+    try:
+        from pathlib import Path
+        path = cfg.decision_log
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        entry["ts"] = time.time()
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+def pre_llm_call(**kwargs) -> Optional[Dict[str, str]]:
+    """pre_llm_call hook. Returns {'context': ...} to advise, else None.
+    NEVER raises — a kev outage must never surface in the turn."""
+    try:
+        cfg = _config.NexaKevConfig.load()
+        if not cfg.hook_enabled:
+            return None
+        user_message = (kwargs.get("user_message") or "").strip()
+        if not user_message:
+            return None
+        session_key = kwargs.get("session_id") or "default"
+        msg_hash = hashlib.sha1(user_message.encode("utf-8")).hexdigest()[:16]
+        routed = _routed.setdefault(session_key[-64:], {})
+        if routed.get(msg_hash):
+            return None
+        if len(routed) > 200:
+            routed.clear()
+        routed[msg_hash] = True
+
+        skills = _load_skills()
+        tools = _load_tools()
+        cap = max(8, cfg.advisory_max_criteria)
+        skills = {k: v[:60] for k, v in _prefilter(user_message, skills, cap).items()}
+        tools = {k: v[:60] for k, v in _prefilter(user_message, tools, cap).items()}
+        questions: Dict[str, Dict[str, Any]] = {}
+        if skills:
+            questions["skill"] = {
+                "type": "choice",
+                "instructions": ("Which skill should the agent load (if any) for this "
+                                 "task? Choose 'none' when no skill clearly applies."),
+                "criteria": {**skills, "none": "No skill applies to this task."},
+            }
+        if tools:
+            questions["tool"] = {
+                "type": "choice",
+                "instructions": ("Which tool is the best FIRST instrument for this task? "
+                                 "Choose 'none' when no specialized tool clearly applies."),
+                "criteria": {**tools, "none": "No specialized tool applies; answer directly."},
+            }
+        if not questions:
+            return None
+
+        state = user_message[: cfg.max_state_chars]
+        ans = _kd.raw_request(state, questions, cfg)
+        if not ans or ans.get("status") != "ok":
+            return None
+
+        s_ans = (ans["answers"].get("skill") or {})
+        t_ans = (ans["answers"].get("tool") or {})
+        s_probs = s_ans.get("probabilities") or {}
+        t_probs = t_ans.get("probabilities") or {}
+
+        _log_decision(cfg, kind="advisory", task=state[:200],
+                      skill_top=s_ans.get("choice"), tool_top=t_ans.get("choice"),
+                      skill_probs={k: round(v, 3) for k, v in list(s_probs.items())[:10]},
+                      tool_probs={k: round(v, 3) for k, v in list(t_probs.items())[:10]},
+                      endpoint=ans.get("endpoint"), latency_ms=ans.get("latency_ms"),
+                      session_id=kwargs.get("session_id") or "")
+
+        skill_hint = _hint("skill: ", s_probs, cfg) or _hint_rel("skill: ", s_probs, cfg)
+        tool_hint = _hint("tool: ", t_probs, cfg) or _hint_rel("tool: ", t_probs, cfg)
+        if not (skill_hint or tool_hint):
+            return None
+        marker = f"\u26a1 [nexa-kev] {' \u00b7 '.join(p for p in (skill_hint, tool_hint) if p)}"
+        context = (
+            marker + "\n(kev's ranked suggestions for THIS task — echo the \u26a1 line "
+            "verbatim at the top of your reply; prefer the named skill/tool when "
+            "reasonable; ignore if clearly wrong. "
+            f"{ans.get('latency_ms')}ms.)"
+        )
+        return {"context": context}
+    except Exception as e:
+        logger.debug("nexa-kev advisory fail-open: %s", e)
+        return None
