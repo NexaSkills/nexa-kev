@@ -32,6 +32,10 @@ Kill-switches per host (profile `.env`): `NEXA_KEV_ENSEMBLE=0`,
     git clone https://github.com/NexaSkills/nexa-kev && cd nexa-kev
     bash scripts/install_nexa_kev.sh
 
+Clone credential: the host needs a NexaSkills GitHub PAT in git's store
+(`git config --global credential.helper store` + one entry for github.com
+in `~/.git-credentials`, fleet-standard on beez/trade).
+
 The installer copies the plugin into `~/.hermes/plugins/nexa-kev`, symlinks
 it into every profile's plugins dir, enables it via `hermes config set`
 (the sanctioned path — it never hand-edits YAML), checks the LLM key, and
