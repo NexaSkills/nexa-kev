@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # check_nexa_kev.sh — READ-ONLY end-to-end verification. Exit 0 = healthy.
 set -uo pipefail
-HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
+# NB: ignore an inherited HERMES_HOME (may be a profile home inside a
+# gateway session); host root is overridable via NK_HOST_HOME only.
+unset HERMES_HOME
+HERMES_HOME="${NK_HOST_HOME:-$HOME/.hermes}"
 fail=0
 note() { printf '%s\n' "$*"; }
 ok()   { printf 'PASS  %s\n' "$*"; }

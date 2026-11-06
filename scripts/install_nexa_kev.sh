@@ -5,40 +5,44 @@
 # those steps instead. Never writes secrets anywhere.
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
-PROFILES="${NEXA_KEV_PROFILES:-}"   # space-separated; default: all profiles
+# NB: do NOT trust an inherited HERMES_HOME env here — inside gateway-served
+# shells it points at a PROFILE home, not the host root. Host root is
+# overridable explicitly via NK_HOST_HOME.
+HOSTROOT="${NK_HOST_HOME:-$HOME/.hermes}"
+PROFILES_STR="${NEXA_KEV_PROFILES:-}"   # space-separated; default: all profiles
 
 echo "== nexa-kev installer (repo: $REPO)"
 
 # 1. Plugin code -> host plugins dir
-mkdir -p "$HERMES_HOME/plugins"
+mkdir -p "$HOSTROOT/plugins"
 if command -v rsync >/dev/null; then
-  rsync -a --delete --exclude __pycache__ "$REPO/plugin/nexa-kev/" "$HERMES_HOME/plugins/nexa-kev/"
+  rsync -a --delete --exclude __pycache__ "$REPO/plugin/nexa-kev/" "$HOSTROOT/plugins/nexa-kev/"
 else
-  rm -rf "$HERMES_HOME/plugins/nexa-kev"
-  cp -r "$REPO/plugin/nexa-kev" "$HERMES_HOME/plugins/nexa-kev"
+  rm -rf "$HOSTROOT/plugins/nexa-kev"
+  cp -r "$REPO/plugin/nexa-kev" "$HOSTROOT/plugins/nexa-kev"
 fi
-echo "  plugin installed -> $HERMES_HOME/plugins/nexa-kev"
+echo "  plugin installed -> $HOSTROOT/plugins/nexa-kev"
 
 # 2. Symlink into every profile's plugins dir (idempotent)
-mapfile -p PROFILES <<< "$PROFILES"
-if [ ${#PROFILES[@]} -eq 0 ] && [ -d "$HERMES_HOME/profiles" ]; then
-  mapfile -t PROFILES < <(ls "$HERMES_HOME/profiles")
+PROFILES=()
+if [ -n "$PROFILES_STR" ]; then read -r -a PROFILES <<< "$PROFILES_STR"; fi
+if [ ${#PROFILES[@]} -eq 0 ] && [ -d "$HOSTROOT/profiles" ]; then
+  mapfile -t PROFILES < <(ls "$HOSTROOT/profiles")
 fi
 for p in "${PROFILES[@]}"; do
-  [ -d "$HERMES_HOME/profiles/$p" ] || continue
-  mkdir -p "$HERMES_HOME/profiles/$p/plugins"
-  ln -sfn "$HERMES_HOME/plugins/nexa-kev" "$HERMES_HOME/profiles/$p/plugins/nexa-kev"
+  [ -d "$HOSTROOT/profiles/$p" ] || continue
+  mkdir -p "$HOSTROOT/profiles/$p/plugins"
+  ln -sfn "$HOSTROOT/plugins/nexa-kev" "$HOSTROOT/profiles/$p/plugins/nexa-kev"
 done
 echo "  symlinked into profiles: ${PROFILES[*]:-<none>}"
 
 # 3. Enable in Hermes config via the sanctioned CLI (never edit yaml by hand)
 enable() {  # $1 = extra hermes args (empty or -p NAME)
   local cur
-  cur=$(hermes $1 config get plugins.enabled 2>/dev/null | tr -d '\r' | tail -1) || true
+  cur=$(env -u HERMES_HOME -u NK_HOST_HOME hermes $1 config get plugins.enabled 2>/dev/null | tr -d '\r' | tail -1) || true
   case "$cur" in *nexa-kev*) echo "  enabled already: hermes $1"; return;; esac
   if [ -z "$cur" ] || [ "$cur" = "None" ]; then
-    hermes $1 config set plugins.enabled '["nexa-kev"]' >/dev/null 2>&1 || true
+    env -u HERMES_HOME -u NK_HOST_HOME hermes $1 config set plugins.enabled '["nexa-kev"]' >/dev/null 2>&1 || true
   else
     local new
     new=$(python3 - "$cur" <<'PY'
@@ -51,16 +55,16 @@ if "nexa-kev" not in lst: lst.append("nexa-kev")
 print(json.dumps(lst))
 PY
 ) || { echo "  WARN: could not parse plugins.enabled ($cur) for 'hermes $1'; set it manually"; return; }
-    hermes $1 config set plugins.enabled "$new" >/dev/null 2>&1 || true
+    env -u HERMES_HOME -u NK_HOST_HOME hermes $1 config set plugins.enabled "$new" >/dev/null 2>&1 || true
   fi
   echo "  enabled: hermes $1"
 }
 enable ""
-for p in "${PROFILES[@]}"; do [ -d "$HERMES_HOME/profiles/$p" ] && enable "-p $p"; done
+for p in "${PROFILES[@]}"; do [ -d "$HOSTROOT/profiles/$p" ] && enable "-p $p"; done
 
 # 4. Key presence (names only; values never printed)
 key_ok=0
-for f in "$HERMES_HOME/.env" "$HERMES_HOME/profiles"/*/.env; do
+for f in "$HOSTROOT/.env" "$HOSTROOT/profiles"/*/.env; do
   [ -f "$f" ] || continue
   if grep -qE "^(NEXA_KEV_API_KEY|HERMES_CUSTOM_AI_NEXASKILLS_CO_ZA_API_KEY)=" "$f"; then key_ok=1; fi
 done
@@ -69,13 +73,13 @@ done
 
 # 5. Direct probe (data layer, no session involved)
 PYBIN="${PYTHON:-}"
-for cand in "$HERMES_HOME"/installs/*/environments/*/venv/bin/python3 "$(command -v python3)"; do
+for cand in "$HOSTROOT"/installs/*/environments/*/venv/bin/python3 "$(command -v python3)"; do
   [ -x "$cand" ] || continue
   if "$cand" -c "import hermes_cli" 2>/dev/null; then PYBIN="$cand"; break; fi
 done
 [ -n "$PYBIN" ] || PYBIN=$(command -v python3)
 echo "  probe python: $PYBIN"
-if HERMES_HOME="${HERMES_PROFILE_HOME:-$HERMES_HOME}" "$PYBIN" - "$HERMES_HOME" <<'PY'
+if HERMES_HOME="${NK_PROBE_PROFILE_HOME:-$HOSTROOT}" "$PYBIN" - "$HOSTROOT" <<'PY'
 import importlib.util, sys, json
 from pathlib import Path
 h = Path(sys.argv[1]) / "plugins" / "nexa-kev"
