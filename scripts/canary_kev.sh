@@ -21,7 +21,7 @@ LOG=/tmp/canary-kev-$R.log
 fails=0
 say(){ printf '  %-24s %s\n' "$1" "$2"; }
 fail(){ say "$1" "FAIL$2"; fails=$((fails+1)); }
-turn(){ mark; OUT=$(timeout 200 env -u HERMES_HOME "${HC[@]}" --pass-session-id -z "$1" 2>/dev/null)
+turn(){ { [ -z "$MARKLOCK" ] && mark; }; OUT=$(timeout 200 env -u HERMES_HOME "${HC[@]}" --pass-session-id -z "$1" 2>/dev/null)
   SID=$(echo "$OUT" | grep -oE '[0-9a-f]{24,36}' | tail -1)
   echo "===== SID=$SID PROMPT=$1" >> "$LOG"; echo "$OUT" >> "$LOG"; }
 mark(){ T0=$(date +%s 2>/dev/null); }
@@ -46,7 +46,7 @@ else fail l1_fired " (${ROW:-no trail row})"; fi
 echo "$ROW" | grep -q '"status": "ok"' && say engine_verdicts OK || fail engine_verdicts ""
 
 # 3. L3 bank routing: doctrine phrasing must produce a SHARED decision.
-turn "policy for everyone on every host: the drill marker is $K2"
+turn "policy for everyone on every host from now on: the drill marker is $K2"
 ROW=$(wait_trail memlearn)
 if echo "$ROW" | grep -q '"decision": "fired"'; then
   echo "$ROW" | grep -q '"bank": "shared"' && say l3_bank_shared "OK ($(echo "$ROW" | grep -oE '"p_shared": [0-9.]+' | head -1))" \
@@ -56,8 +56,10 @@ else fail l3_fired " (${ROW:-no trail row})"; fi
 # 4. L2 error-recall: same hard error in two fresh sessions; second run
 #    must auto-recall the first failure's experience (trail row fired).
 BAD="zk-$R-probe"
+MARKLOCK=1; mark
 turn "use the terminal tool to run the command $BAD once and quote its output"
 turn "use the terminal tool to run the command $BAD once and quote its output"
+unset MARKLOCK
 ROW=$(wait_trail memrecall 40)
 echo "$ROW" | grep -q '"decision": "fired"' && say l2_error_recall "OK ($(echo "$ROW" | grep -oE '"ms": [0-9.]+' | head -1))" || fail l2_error_recall " (${ROW:-NO ROW — advisory rows exist but no memrecall rows = transform dispatch died on a hot-reload; bounce gateway})"
 
