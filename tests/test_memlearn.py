@@ -144,6 +144,21 @@ def test_uncertain_bank_defaults_private(lane, monkeypatch):
     assert "PRIVATE" in out["context"]
 
 
+def test_uncertain_bank_lean_shared(lane, monkeypatch):
+    """Fleet-doctrine language scores p_shared 0.6-0.7 = engine UNCERTAIN on
+    every host (calibrated 2026-11-10 across nexa+template canaries). An
+    UNCERTAIN bank verdict at >=0.6 WITH ensemble agreement routes SHARED;
+    below the floor (or spread-out) it stays PRIVATE (default-secure)."""
+    _stub_verdicts(monkeypatch, lane, "SAFE/YES", "UNCERTAIN", p2=0.68, s2=0.01)
+    out = lane.pre_llm_call(user_message="from now on everyone on every host uses this",
+                            session_id="s1")
+    assert "SHARED" in out["context"] and "mnemosyne_shared_remember" in out["context"]
+    _stub_verdicts(monkeypatch, lane, "SAFE/YES", "UNCERTAIN", p2=0.55, s2=0.01)
+    out = lane.pre_llm_call(user_message="from now on everyone everywhere uses this",
+                            session_id="s2")
+    assert "PRIVATE" in out["context"]
+
+
 def test_uncertain_save_is_silent(lane, monkeypatch, tmp_path):
     _stub_verdicts(monkeypatch, lane, "UNCERTAIN", "NO", p1=0.6)
     out = lane.pre_llm_call(user_message="from now on maybe run the checker",

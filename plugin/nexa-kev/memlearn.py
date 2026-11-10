@@ -237,7 +237,11 @@ def pre_llm_call(**kwargs: Any) -> Optional[Dict[str, str]]:
                                else "silent_no")
             _log(rec)
             return None
-        shared = d2.get("verdict") == "SAFE/YES" and _agree(d2)   # unsure -> private
+        # Fleet-doctrine calibration (2026-11-10): Q2 lands 0.6-0.7 =
+        # UNCERTAIN with tight spread on every host; lean-shared at >=0.6
+        # when the ensemble agrees; below that stays default-secure private.
+        shared = _agree(d2) and (d2.get("verdict") == "SAFE/YES"
+                                 or float(d2.get("noul") or 0.0) >= 0.6)
         _FIRED[session_key] = _FIRED.get(session_key, 0) + 1
         if len(_FIRED) > 1000:
             _FIRED.clear()
