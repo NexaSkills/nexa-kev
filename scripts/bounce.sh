@@ -25,19 +25,44 @@ for UNIT in "${UNITS[@]}"; do
 done
 
 # 2026-11-10: on the QEMU-guest hosts (trade/clone) there is no gateway
-# unit; the resident session server is `hermes dashboard` autostarted at
-# boot. A plugin rollout that only bounced units left it running PRE-ROLLOUT
-# code in memory (bank decisions and lane rows silently came from the old
-# build). Recycle it with identical argv so the customer's dashboard comes
-# back on the same port with the fresh plugin code.
+# unit; sessions are served by RESIDENT processes (boot-autostarted
+# `hermes dashboard`, or a process_supervisor-owned python server). These
+# hold plugin code in memory from their START time, so a rollout that only
+# bounced units kept serving pre-rollout lanes (bank verdicts and row
+# schemas provably matched Monday's build although the checkout was fresh).
+# Recycle every such resident: kill, then respawn `hermes dashboard` with
+# the ORIGINAL host/port so the customer's dashboard returns on 9119.
+respawn_dashboard() {  # $1 = cmdline string of the old server
+  local H=localhost P=9119 tok prev=""
+  for tok in $1; do
+    case "$prev" in --host) H=$tok ;; --port) P=$tok ;; esac
+    prev=$tok
+  done
+  setsid nohup hermes dashboard --host "$H" --port "$P" --no-open --skip-build \
+    >>/tmp/nexa-kev-dashboard.log 2>&1 &
+  echo "dashboard respawn requested (host $H port $P)" >> "$LOG"
+}
 for PID in $(pgrep -f "dashboard --host" 2>/dev/null); do
   [ "$PID" = "$$" ] && continue
   CMD=$(tr '\0' ' ' < "/proc/$PID/cmdline" 2>/dev/null)
-  case "$CMD" in *hermes*) ;; *) continue ;; esac
+  case "$CMD" in *hermes*|*python*) ;; *) continue ;; esac
   echo "=== $(date -Is) recycling standalone dashboard pid $PID" >> "$LOG"
   kill "$PID" 2>/dev/null
   sleep 3
   kill -0 "$PID" 2>/dev/null && kill -9 "$PID" 2>/dev/null
-  setsid nohup $CMD >>/tmp/nexa-kev-dashboard.log 2>&1 &
-  echo "dashboard respawn requested (see /tmp/nexa-kev-dashboard.log)" >> "$LOG"
+  respawn_dashboard "$CMD"
+done
+# supervisor-managed session server (cmdline args do NOT contain the
+# dashboard flags, so the pgrep above misses it): recycle via the supervised
+# pid extracted from its supervisor script.
+for SUP in $(pgrep -f "process_supervisor.sh [0-9]" 2>/dev/null); do
+  SPID=$(tr '\0' ' ' < "/proc/$SUP/cmdline" 2>/dev/null | awk '{print $NF}')
+  case "$SPID" in *[!0-9]*|"") continue ;; esac
+  SCMD=$(tr '\0' ' ' < "/proc/$SPID/cmdline" 2>/dev/null)
+  case "$SCMD" in *dashboard*port*|*python*hermes*) ;; *) continue ;; esac
+  echo "=== $(date -Is) recycling supervised server pid $SPID (sup $SUP)" >> "$LOG"
+  kill "$SPID" 2>/dev/null
+  sleep 3
+  kill -0 "$SPID" 2>/dev/null && kill -9 "$SPID" 2>/dev/null
+  respawn_dashboard "$SCMD"
 done
