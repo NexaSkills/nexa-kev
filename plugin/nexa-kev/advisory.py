@@ -286,9 +286,10 @@ def _priors_digest(cfg: Any) -> str:
         if not rows:
             return ""
         names = sorted(set(used) | set(ign))[:8]
-        parts = [f"{n}(u={used.get(n, 0)},i={ign.get(n, 0)})" for n in names]
-        return ("outcome-prior from last " + str(rows)
-                + " advisory results: " + ", ".join(parts) + "\n")
+        parts = ["{} was suggested and taken {} of {} times".format(
+                     n, used.get(n, 0), used.get(n, 0) + ign.get(n, 0))
+                 for n in names]
+        return ("historical outcomes: " + "; ".join(parts) + ".\n")
     except Exception:
         return ""
 

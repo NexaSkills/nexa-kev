@@ -117,7 +117,8 @@ def test_priors_digest_counts(tmp_path):
         '{"kind": "advisory_outcome", "suggested": ["arxiv", "pdf", "x"], "used": 0}\n'
         '{"kind": "advisory", "noise": 1}\n')
     d = advisory._priors_digest(_CfgLog(p))
-    assert "pdf(u=1,i=1)" in d and "arxiv(u=0,i=2)" in d
+    assert "pdf was suggested and taken 1 of 2 times" in d
+    assert "arxiv was suggested and taken 0 of 2 times" in d
     assert d.endswith("\n")
 
 
