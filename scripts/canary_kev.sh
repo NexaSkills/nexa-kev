@@ -21,7 +21,7 @@ LOG=/tmp/canary-kev-$R.log
 fails=0
 say(){ printf '  %-24s %s\n' "$1" "$2"; }
 fail(){ say "$1" "FAIL$2"; fails=$((fails+1)); }
-turn(){ { [ -z "$MARKLOCK" ] && mark; }; OUT=$(timeout 200 env -u HERMES_HOME "${HC[@]}" --pass-session-id -z "$1" 2>/dev/null)
+turn(){ { [ -z "${MARKLOCK:-}" ] && mark; }; OUT=$(timeout 200 env -u HERMES_HOME "${HC[@]}" --pass-session-id -z "$1" 2>/dev/null)
   SID=$(echo "$OUT" | grep -oE '[0-9a-f]{24,36}' | tail -1)
   echo "===== SID=$SID PROMPT=$1" >> "$LOG"; echo "$OUT" >> "$LOG"; }
 mark(){ T0=$(date +%s 2>/dev/null); }
