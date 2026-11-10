@@ -20,9 +20,10 @@ import re
 import time
 from typing import Any, Dict, Optional
 
-_FLEET_RE = re.compile(r"\b(?:every|all|everyone)\b[^\n]{0,60}?\b(?:agents?|hosts?|machines?|fleet|boxes?)\b", re.I)
-_HOSTY_RE = re.compile(r"(\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b|/home/\w|/Users/\w|\bport\s+\d{2,5}\b|\bthis\s+(?:host|machine|box)\b)", re.I)
-_POLICY_RE = re.compile(r"\b(from now on|always|never|policy|rule)\b", re.I)
+_FLEET_RE = re.compile(r"\b(?:every|all|everyone|us|we|team)\b[^\n]{0,80}?\b(?:agents?|hosts?|machines?|fleet|boxes?|of\b|here|forward|now on)\b|"
+                       r"\b(?:house style|for (?:the|our) team|team[- ]wide|fleet[- ]wide|org[- ]wide)\b", re.I)
+_HOSTY_RE = re.compile(r"(\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b|/home/\w|/Users/\w|\bport\s+\d{2,5}\b|\bthis\s+(?:host|machine|box)\b|\bmy (?:laptop|machine|host|box)\b)", re.I)
+_POLICY_RE = re.compile(r"\b(from now on|from here on|going forward|as of now|always|never|policy|rule|house style|standard(?:ize)?|convention)\b", re.I)
 
 _EXPMEMO: Dict[str, Any] = {}
 _EXPMEMO_TTL = 600.0

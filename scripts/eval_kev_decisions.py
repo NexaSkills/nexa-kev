@@ -27,17 +27,7 @@ EXPECT_YES = {"bank": {"shared": "SAFE/YES", "private": "NO"},
               "save": {"save": "SAFE/YES", "nosave": "NO"}}
 
 
-import re
-_FLEET = re.compile(r"\b(every|all|everyone)\b.*\b(agent|host|machine|fleet)s?\b", re.I)
-_HOSTY = re.compile(r"(\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b|/home/\w|port\s+\d{2,5}|\bthis (host|machine|box)\b)", re.I)
-_POLICY = re.compile(r"\b(from now on|always|never|policy|rule)\b", re.I)
-
-
-def signals(text: str) -> str:
-    return ("signals: scope-tokens=" + ("fleet-wide" if _FLEET.search(text) else "none")
-            + "; host-specific-tokens=" + ("present" if _HOSTY.search(text) else "none")
-            + "; speech-act=" + ("standing-policy" if _POLICY.search(text) else "conversational")
-            + "\n")
+import askctx  # single source of signal regexes (plugin)
 
 
 def score(case, offline=False, ctx=False):
@@ -45,7 +35,7 @@ def score(case, offline=False, ctx=False):
         # deterministic stub: prefilter-class style signal only
         s = 0.9 if case["expect"] in ("shared", "save") else 0.2
         return {"noul": s, "verdict": "SAFE/YES" if s >= 0.75 else "NO"}
-    body = (signals(case["text"]) if ctx else "") + f"Content under evaluation:\n{case['text']}"
+    body = (askctx.signals(case["text"]) if ctx else "") + f"Content under evaluation:\n{case['text']}"
     r = kd.decide(body, [QUESTIONS[case["lane"]]])
     ds = (r.get("decisions") or {})
     return ds.get("q1") or {"noul": None, "verdict": "ERR:" + r.get("reason", "?")}
@@ -78,7 +68,7 @@ def main():
                   f"{sum(neg)/len(neg):.3f})")
     # pass = per-lane separation margin above frozen baselines (verdict
     # strings are informational; separation is what context work moves).
-    BASELINE = {"bank": 0.280, "save": 0.761}
+    BASELINE = {"bank": 0.491, "save": 0.761}  # signals-on config
     bad = [] if offline else [l for l, m in margins.items()
                  if m < BASELINE[l] - 0.05]
     print(f"margins={ {k: round(v, 3) for k, v in margins.items()} } "

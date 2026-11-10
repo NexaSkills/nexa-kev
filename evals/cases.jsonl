@@ -6,3 +6,7 @@
 {"id": "save-chitchat-1", "lane": "save", "expect": "nosave", "text": "ok thanks, what time is it"}
 {"id": "save-onetime-1", "lane": "save", "expect": "nosave", "text": "can you check the status of the gateway right now"}
 {"id": "save-correction-1", "lane": "save", "expect": "save", "text": "no, that is wrong - from now on never hand me a command you have not verified on the target host"}
+{"id": "doctrine-paraphrase-1", "lane": "bank", "expect": "shared", "text": "our house style going forward is to run the checker before any rollout"}
+{"id": "doctrine-paraphrase-2", "lane": "bank", "expect": "shared", "text": "remember for the team: tailnet resolver first, always was the thing that worked"}
+{"id": "doctrine-paraphrase-3", "lane": "bank", "expect": "shared", "text": "id like you to prefer concise commit messages from here on for all of us"}
+{"id": "notpolicy-chitchat-1", "lane": "bank", "expect": "private", "text": "whats the weather like today"}
