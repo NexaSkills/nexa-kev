@@ -50,8 +50,8 @@ between the root and a profile surface.)
 On every fleet host (anything that is not the source dev host), the repo
 lives SELF-CONTAINED under the plugin tree — no `~/ops`, no projects dirs:
 
-    ssh <fleet-host> 'git clone https://github.com/NexaSkills/nexa-kev ~/.hermes/plugins/nexa-kev-src 2>/dev/null; \
-      bash ~/.hermes/plugins/nexa-kev-src/scripts/rollout_update.sh'
+    ssh <fleet-host> 'git clone https://github.com/NexaSkills/nexa-kev ~/.hermes/checkout/nexa-kev 2>/dev/null; \
+      bash ~/.hermes/checkout/nexa-kev/scripts/rollout_update.sh'
 
 `rollout_update.sh` is idempotent and self-healing: it `git pull`s the
 checkout (or clones it), points `~/.hermes/plugins/nexa-kev` (and every

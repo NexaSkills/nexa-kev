@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 # rollout_update.sh — fleet-host update for the nexa-kev plugin (Jan's
-# 2026-11-10 layout rule): the git checkout LIVES IN THE PLUGIN LOCATION
-# (~/.hermes/plugins/nexa-kev-src) and the plugin dir is a symlink into
-# it, so a plain `git pull` IS the deployment. No ~/ops, no projects dir,
-# no rsync copies. Idempotent / self-healing: safe to re-run blindly; a
-# missing checkout gets cloned, a missing/foreign plugin-dir symlink is
-# repaired (old real dir kept as .pre-git.<ts> backup).
+# 2026-11-10 layout rules): the git checkout is self-contained under
+# ~/.hermes but OUTSIDE any plugin scan path (~/.hermes/checkout/
+# nexa-kev), and the plugin dir is a symlink into it, so a plain
+# `git pull` IS the deployment. No ~/ops, no Projects dir, no rsync
+# copies. The former ~/.hermes/plugins/nexa-kev-src location is migrated
+# automatically (loader-inert there, but it LOOKED like a competing
+# plugin dir — Jan 2026-11-10; a dir named nexa-kev* inside a scanned
+# plugins/ is a confusion magnet regardless of manifest validity).
+# Idempotent / self-healing: safe to re-run blindly; a missing checkout
+# gets cloned, a missing/foreign plugin-dir symlink is repaired (old
+# real dir kept as .pre-git.<ts> backup, swept outside the scan path).
 #
 # Usage (on the target host, or via ssh):  bash rollout_update.sh
 # Then: bounce the gateway from an OUTSIDE shell (scripts/bounce.sh) and
@@ -14,10 +19,17 @@ set -euo pipefail
 REPO_URL="${NEXA_KEV_REPO_URL:-https://github.com/NexaSkills/nexa-kev}"
 BRANCH="${NEXA_KEV_BRANCH:-main}"
 HOSTROOT="${NK_HOST_HOME:-$HOME/.hermes}"
-SRC="$HOSTROOT/plugins/nexa-kev-src"
+SRC="$HOSTROOT/checkout/nexa-kev"
+OLD_SRC="$HOSTROOT/plugins/nexa-kev-src"
+
+# one-time migration from the in-plugins checkout location
+if [ -d "$OLD_SRC/.git" ] && [ ! -e "$SRC" ]; then
+  mkdir -p "$HOSTROOT/checkout"
+  mv "$OLD_SRC" "$SRC" && echo "  migrated checkout: $OLD_SRC -> $SRC"
+fi
 
 echo "== nexa-kev rollout_update (host root: $HOSTROOT)"
-mkdir -p "$HOSTROOT/plugins"
+mkdir -p "$HOSTROOT/plugins" "$HOSTROOT/checkout"
 if [ -d "$SRC/.git" ]; then
   git -C "$SRC" remote set-url origin "$REPO_URL"
   git -C "$SRC" fetch origin "$BRANCH" || { echo "FAIL: fetch"; exit 1; }
