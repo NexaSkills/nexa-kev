@@ -72,3 +72,13 @@ def test_unrelated_skill_view_counts_as_not_used(monkeypatch):
     advisory._PENDING["sess-abc"]["turns"] = advisory._PENDING_MAX_TURNS + 1
     advisory._tick("sess-abc", _Cfg())
     assert rows[0]["used"] == 0
+
+
+def test_exit_flush_emits_outcome(monkeypatch):
+    rows = _capture(monkeypatch)
+    advisory._PENDING.clear()
+    _arm(skills=("arxiv",))
+    advisory._flush_all()
+    assert rows and rows[0]["kind"] == "advisory_outcome"
+    assert rows[0]["exit_flush"] is True and rows[0]["used"] == 0
+    assert advisory._PENDING == {}

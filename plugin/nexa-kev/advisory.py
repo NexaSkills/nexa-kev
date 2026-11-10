@@ -173,6 +173,30 @@ _ERR_RE = re.compile(
     r"exit code [1-9]\d*|error:|failed)", re.I)
 
 
+def _flush_all() -> None:
+    """Emit pending outcomes at process exit (one-shot -z sessions never
+    reach the 8-turn/900s expiry ticks)."""
+    try:
+        cfg = _config.NexaKevConfig.load()
+    except Exception:
+        cfg = None
+    for key in list(_PENDING):
+        pend = _PENDING.pop(key)
+        try:
+            _log_decision(cfg, kind="advisory_outcome",
+                          session=pend.get("session"),
+                          suggested=sorted(pend["skills"])[:3],
+                          used=pend.get("used") or 0,
+                          later_error=1 if pend.get("err") else 0,
+                          turns=pend.get("turns", 0), exit_flush=True)
+        except Exception:
+            pass
+
+
+import atexit as _atexit
+_atexit.register(_flush_all)
+
+
 def _emit(cfg: Any, key: str, pend: Dict[str, Any]) -> None:
     try:
         _log_decision(cfg, kind="advisory_outcome", session=pend.get("session"),
