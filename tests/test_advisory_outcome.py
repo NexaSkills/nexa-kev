@@ -82,3 +82,15 @@ def test_exit_flush_emits_outcome(monkeypatch):
     assert rows and rows[0]["kind"] == "advisory_outcome"
     assert rows[0]["exit_flush"] is True and rows[0]["used"] == 0
     assert advisory._PENDING == {}
+
+
+def test_notes_flush_for_oneshots(monkeypatch):
+    rows = _capture(monkeypatch)
+    advisory._PENDING.clear()
+    _arm(skills=("arxiv",))
+    advisory._PENDING["sess-abc"]["ts"] -= 30   # 30s into the session
+    advisory.note_tool_call("sess-abc", "terminal", "", "ok files listed")
+    assert not rows                              # first note: not yet
+    advisory.note_tool_call("sess-abc", "web_search", "", "results")
+    assert rows and rows[0]["used"] == 0         # second note flushes
+    assert "sess-abc"[-64:] not in advisory._PENDING

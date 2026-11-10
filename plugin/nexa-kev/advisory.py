@@ -227,6 +227,7 @@ def note_tool_call(session_key: str, tool_name: str, args_text: str,
         pend = _PENDING.get((session_key or "default")[-64:])
         if not pend:
             return
+        pend["notes"] = pend.get("notes", 0) + 1
         low = ((args_text or "") + "\n" + (result_text or ""))[:1200].lower()
         for cand in pend["skills"]:
             if cand and re.search(r"\b" + re.escape(cand.lower()) + r"\b", low):
@@ -236,6 +237,11 @@ def note_tool_call(session_key: str, tool_name: str, args_text: str,
                 return
         if _ERR_RE.search((result_text or "")[:2000]):
             pend["err"] = 1
+        # hermes one-shots may os._exit() past atexit: flush from inside
+        # the turn once the session has clearly moved past the advice.
+        if pend["notes"] >= 2 and time.time() - pend["ts"] > 20:
+            _emit(_config.NexaKevConfig.load(),
+                  (session_key or "default")[-64:], pend)
     except Exception:
         pass
 
