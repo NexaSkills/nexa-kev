@@ -1,0 +1,12 @@
+{"id": "doctrine-fleet-1", "lane": "bank", "expect": "shared", "text": "policy for everyone on every host from now on: always run the checker before rollout"}
+{"id": "doctrine-fleet-2", "lane": "bank", "expect": "shared", "text": "from now on all agents on all machines use the tailnet resolver first"}
+{"id": "private-agent-1", "lane": "bank", "expect": "private", "text": "from now on when I write canary notes on this machine end them with the audit tag"}
+{"id": "private-host-1", "lane": "bank", "expect": "private", "text": "from now on this host uses psql at ~/lcm-pg/pg/bin/psql port 54331"}
+{"id": "save-approval-1", "lane": "save", "expect": "save", "text": "great, that worked - from now on keep doing it that way"}
+{"id": "save-chitchat-1", "lane": "save", "expect": "nosave", "text": "ok thanks, what time is it"}
+{"id": "save-onetime-1", "lane": "save", "expect": "nosave", "text": "can you check the status of the gateway right now"}
+{"id": "save-correction-1", "lane": "save", "expect": "save", "text": "no, that is wrong - from now on never hand me a command you have not verified on the target host"}
+{"id": "doctrine-paraphrase-1", "lane": "bank", "expect": "shared", "text": "our house style going forward is to run the checker before any rollout"}
+{"id": "doctrine-paraphrase-2", "lane": "bank", "expect": "shared", "text": "remember for the team: tailnet resolver first, always was the thing that worked"}
+{"id": "doctrine-paraphrase-3", "lane": "bank", "expect": "shared", "text": "id like you to prefer concise commit messages from here on for all of us"}
+{"id": "notpolicy-chitchat-1", "lane": "bank", "expect": "private", "text": "whats the weather like today"}
