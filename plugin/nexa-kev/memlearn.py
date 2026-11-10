@@ -76,6 +76,8 @@ try:
 except AttributeError:  # pragma: no cover - older config
     _BANK_CRITERIA = ("Shared is only for facts that are true and useful "
                       "for every agent; agent-specific facts are private.")
+_LANE_IMPL = "lean-shared-0.6"  # bump with each lane-behavior change
+
 _Q_BANK = (
     "Would the rule or fact in this message be true and useful for EVERY "
     "agent and machine in the fleet (shared bank), or is it specific to "
@@ -246,6 +248,8 @@ def pre_llm_call(**kwargs: Any) -> Optional[Dict[str, str]]:
         if len(_FIRED) > 1000:
             _FIRED.clear()
         rec["bank"] = "shared" if shared else "private"
+        rec["impl"] = _LANE_IMPL  # lane code identity (debug fleet drift)
+        rec["verdict_q2"] = d2.get("verdict")
         rec["ms"] = round((time.monotonic() - t0) * 1000, 1)
         if _flag("MEMLEARN_SHADOW", "0"):
             rec["decision"] = "fired_shadow"
