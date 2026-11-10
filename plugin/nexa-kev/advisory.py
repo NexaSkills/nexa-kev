@@ -239,7 +239,8 @@ def note_tool_call(session_key: str, tool_name: str, args_text: str,
             pend["err"] = 1
         # hermes one-shots may os._exit() past atexit: flush from inside
         # the turn once the session has clearly moved past the advice.
-        if pend["notes"] >= 2 and time.time() - pend["ts"] > 20:
+        if pend["notes"] >= 3 or (pend["notes"] >= 2
+                                  and time.time() - pend["ts"] > 20):
             _emit(_config.NexaKevConfig.load(),
                   (session_key or "default")[-64:], pend)
     except Exception:

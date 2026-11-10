@@ -94,3 +94,12 @@ def test_notes_flush_for_oneshots(monkeypatch):
     advisory.note_tool_call("sess-abc", "web_search", "", "results")
     assert rows and rows[0]["used"] == 0         # second note flushes
     assert "sess-abc"[-64:] not in advisory._PENDING
+
+
+def test_three_notes_flush_fast(monkeypatch):
+    rows = _capture(monkeypatch)
+    advisory._PENDING.clear()
+    _arm(skills=("arxiv",))          # fresh ts: <20s
+    for i in range(3):
+        advisory.note_tool_call("sess-abc", "terminal", "", "fine")
+    assert rows and rows[0]["used"] == 0
