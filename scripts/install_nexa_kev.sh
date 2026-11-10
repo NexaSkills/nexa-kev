@@ -14,8 +14,14 @@ PROFILES_STR="${NEXA_KEV_PROFILES:-}"   # space-separated; default: all profiles
 echo "== nexa-kev installer (repo: $REPO)"
 
 # 1. Plugin code -> host plugins dir
+#    Fleet layout (2026-11-10 rule): if the plugin dir already resolves
+#    inside this repo checkout (rollout_update.sh shape: plugins/nexa-kev
+#    -> <repo>/plugin/nexa-kev symlink), the code is ALREADY deployed —
+#    skip copying entirely (git pull is the deployment).
 mkdir -p "$HOSTROOT/plugins"
-if command -v rsync >/dev/null; then
+if [ "$(readlink -f "$HOSTROOT/plugins/nexa-kev" 2>/dev/null)" = "$(readlink -f "$REPO/plugin/nexa-kev")" ]; then
+  echo "  plugin live via repo checkout symlink (git-pull layout) — copy skipped"
+elif command -v rsync >/dev/null; then
   rsync -a --delete --exclude __pycache__ "$REPO/plugin/nexa-kev/" "$HOSTROOT/plugins/nexa-kev/"
 else
   rm -rf "$HOSTROOT/plugins/nexa-kev"

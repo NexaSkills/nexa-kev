@@ -175,6 +175,16 @@ def test_dict_and_weird_results_defended(lane, monkeypatch):
         result=None, session_id="s1").endswith("rule")
 
 
+def test_shadow_mode_logs_without_trailer(lane, monkeypatch, tmp_path):
+    monkeypatch.setenv("NEXA_KEV_MEMRECALL_SHADOW", "1")
+    _stub_sibling(monkeypatch, lane, ["a stored rule"])
+    out = lane.transform_tool_result(
+        tool_name="terminal", status="error", error_message="shadow failure here",
+        result="shadow failure here", session_id="s1")
+    assert out is None
+    assert _rows(tmp_path)[-1]["decision"] == "fired_shadow"
+
+
 def test_bad_recall_payload_fail_open(lane, monkeypatch):
     monkeypatch.setattr(lane, "_sibling_recall", lambda: (lambda t, a: "not-json{{"))
     assert lane.transform_tool_result(

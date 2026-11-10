@@ -229,6 +229,10 @@ def transform_tool_result(**kwargs: Any) -> Optional[str]:
         _FIRED[session_key] = _FIRED.get(session_key, 0) + 1
         if len(_FIRED) > 1000:
             _FIRED.clear()
+        if _flag("MEMRECALL_SHADOW", "0"):
+            rec["decision"] = "fired_shadow"   # soak mode: log, inject nothing
+            _log(rec)
+            return None
         rec["decision"] = "fired"
         _log(rec)
         trailer = ("\n\n--- Related memory (nexa-kev recall) ---\n"

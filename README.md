@@ -90,6 +90,7 @@ All in the profile `~/.hermes/.env` (never in code):
 | `NEXA_KEV_MEMLEARN_MAX_SESSION` | `3` | max save-directives per session |
 | `NEXA_KEV_MEMRECALL` | `1` | L2 mid-task error-recall lane kill-switch |
 | `NEXA_KEV_MEMRECALL_MAX_SESSION` | `2` | max recall trailers per session |
+| `NEXA_KEV_MEMRECALL_SHADOW` | `0` | `1` = probe+log recall candidates but append nothing (soak mode) |
 | `NEXA_KEV_MEMRECALL_KEVGATE` | `0` | let kev gate pattern-only (non-error) recalls (experiment) |
 
 ## Self-learning memory lanes (v0.4.0)
