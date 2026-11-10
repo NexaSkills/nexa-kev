@@ -30,6 +30,10 @@ fi
 echo "  plugin installed -> $HOSTROOT/plugins/nexa-kev"
 
 # 2. Symlink into every profile's plugins dir (idempotent)
+#    DRIFT BUG FIX (2026-11-10, found on buddyos-nexa): `ln -sfn target
+#    existing-dir` does NOT replace the dir — it creates a link INSIDE it,
+#    silently leaving a stale CODE COPY live for profile sessions. So an
+#    existing real dir is first moved aside (backup, not deleted).
 PROFILES=()
 if [ -n "$PROFILES_STR" ]; then read -r -a PROFILES <<< "$PROFILES_STR"; fi
 if [ ${#PROFILES[@]} -eq 0 ] && [ -d "$HOSTROOT/profiles" ]; then
@@ -37,8 +41,17 @@ if [ ${#PROFILES[@]} -eq 0 ] && [ -d "$HOSTROOT/profiles" ]; then
 fi
 for p in "${PROFILES[@]}"; do
   [ -d "$HOSTROOT/profiles/$p" ] || continue
+  case "$p" in profiles|*) ;; esac   # skip recursive nonsense dir name
+  [ "$p" = "profiles" ] && continue  # ghost dir ~/.hermes/profiles/profiles
   mkdir -p "$HOSTROOT/profiles/$p/plugins"
-  ln -sfn "$HOSTROOT/plugins/nexa-kev" "$HOSTROOT/profiles/$p/plugins/nexa-kev"
+  link="$HOSTROOT/profiles/$p/plugins/nexa-kev"
+  if [ -e "$link" ] && [ ! -L "$link" ]; then
+    mv "$link" "$link.stale-dir.$(date +%s)"
+    echo "  moved stale dir aside: $link.stale-dir.*"
+  fi
+  ln -sfn "$HOSTROOT/plugins/nexa-kev" "$link"
+  [ "$(readlink -f "$link")" = "$(readlink -f "$HOSTROOT/plugins/nexa-kev")" ] \
+    || echo "  WARN: symlink verify failed for $link"
 done
 echo "  symlinked into profiles: ${PROFILES[*]:-<none>}"
 

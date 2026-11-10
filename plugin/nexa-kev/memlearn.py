@@ -245,4 +245,9 @@ def pre_llm_call(**kwargs: Any) -> Optional[Dict[str, str]]:
         return {"context": _directive(float(d1.get("noul") or 0), shared, user_msg)}
     except Exception as e:  # never break a turn over a maybe-memory
         logger.debug("nexa-kev memlearn error (fail-open): %s", e)
+        try:
+            _log({"kind": "memlearn", "decision": f"error:{type(e).__name__}",
+                  "err": str(e)[:160], "ts": time.time()})
+        except Exception:
+            pass
         return None

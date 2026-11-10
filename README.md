@@ -40,6 +40,26 @@ The installer copies the plugin into `~/.hermes/plugins/nexa-kev`, symlinks
 it into every profile's plugins dir, enables it via `hermes config set`
 (the sanctioned path — it never hand-edits YAML), checks the LLM key, and
 runs a direct probe. Re-run any time after `git pull` to upgrade.
+(Stale REAL directories found where a symlink belongs — a drift bug class
+fixed 2026-11-10 — are moved aside as `*.stale-dir.<ts>` backups, never
+deleted silently; `check_nexa_kev.sh` now FAILs on any version drift
+between the root and a profile surface.)
+
+### Fleet hosts = customer systems (rollout layout, hard rule 2026-11-10)
+
+On every fleet host (anything that is not the source dev host), the repo
+lives SELF-CONTAINED under the plugin tree — no `~/ops`, no projects dirs:
+
+    ssh <fleet-host> 'git clone https://github.com/NexaSkills/nexa-kev ~/.hermes/plugins/nexa-kev-src 2>/dev/null; \
+      bash ~/.hermes/plugins/nexa-kev-src/scripts/rollout_update.sh'
+
+`rollout_update.sh` is idempotent and self-healing: it `git pull`s the
+checkout (or clones it), points `~/.hermes/plugins/nexa-kev` (and every
+profile symlink) INTO the checkout so future updates are literally just a
+`git pull` + gateway bounce, and re-runs the installer legs (enable,
+symlink verify; the copy step self-skips in this layout).
+Dev flow per policy: develop + full-test on the source dev host FIRST,
+then roll template, then (only when asked) other hosts.
 
 Two steps the installer deliberately does NOT do for you (it prints them):
 
@@ -54,7 +74,8 @@ Two steps the installer deliberately does NOT do for you (it prints them):
    or `hermes-gateway-default` (fleet multiplex), plus
    `systemctl --user restart hermes-webui hermes-dashboard` where present.
    Confirm in the fresh gateway log:
-   `registered tool kev_decide` and `memory-router hook`.
+   `registered tool kev_decide`, `memory-router hook`,
+   `memlearn hook`, `memrecall hook`.
 
 ## Verify (do all three)
 

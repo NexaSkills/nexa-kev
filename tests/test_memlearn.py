@@ -229,6 +229,15 @@ def test_history_context_reaches_state(lane, monkeypatch):
     assert "deploy.sh" in calls["state"]
 
 
+def test_internal_error_is_logged_not_swallowed_silently(lane, monkeypatch, tmp_path):
+    def boom(state, questions, properties=None, cfg=None):
+        raise RuntimeError("stubbed decide explosion")
+    monkeypatch.setattr(lane._kd, "decide", boom)
+    assert lane.pre_llm_call(user_message="from now on always quote checker output",
+                             session_id="s-err") is None
+    assert _rows(tmp_path)[-1]["decision"].startswith("error:")
+
+
 def test_short_and_empty_messages_inert(lane, monkeypatch):
     def boom(*a, **k):
         raise AssertionError("no gateway call for trivial messages")

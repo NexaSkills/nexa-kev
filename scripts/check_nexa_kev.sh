@@ -54,6 +54,16 @@ trail=$(find "$HERMES_HOME/profiles" -path "*plugins-data/nexa-kev/decisions.jso
 
 # ---- v0.4.0 self-learning lanes: static + offline contract probes ----
 PDIR="$HERMES_HOME/plugins/nexa-kev"
+# version drift: root + every profile-surface must resolve the SAME version
+ROOTVER=$(grep -m1 '^version' "$PDIR/plugin.yaml" 2>/dev/null | tr -d '"' | awk '{print $2}')
+drift=""
+for pf in "$HERMES_HOME"/profiles/*/plugins/nexa-kev; do
+  [ -e "$pf" ] || continue
+  v=$(grep -m1 '^version' "$pf/plugin.yaml" 2>/dev/null | tr -d '"' | awk '{print $2}')
+  [ "$v" = "$ROOTVER" ] || drift="$drift $pf=$v"
+done
+[ -z "$drift" ] && ok "no version drift across surfaces (root=$ROOTVER)" \
+  || bad "STALE plugin copies on profile surfaces:$drift"
 grep -q "transform_tool_result" "$PDIR/plugin.yaml" 2>/dev/null \
   && ok "manifest lists transform_tool_result hook" || bad "manifest missing transform_tool_result (pre-0.4.0 install?)"
 for ln in memlearn memrecall; do

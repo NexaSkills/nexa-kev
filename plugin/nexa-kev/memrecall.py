@@ -240,4 +240,9 @@ def transform_tool_result(**kwargs: Any) -> Optional[str]:
         return result_text + trailer
     except Exception as e:
         logger.debug("nexa-kev memrecall error (fail-open): %s", e)
+        try:
+            _log({"kind": "memrecall", "decision": f"error:{type(e).__name__}",
+                  "err": str(e)[:160], "ts": time.time()})
+        except Exception:
+            pass
         return None
