@@ -162,6 +162,38 @@ def _err_line(result_text: str, error_message: str) -> str:
     return src.splitlines()[0][:200] if src else ""
 
 
+_SIB = {}
+
+
+def _sibling(name: str):
+    """Return the advisory/context module INSTANCE the hook loader loaded
+    (per-home module names), not a fresh second copy: shared _PENDING."""
+    try:
+        if name in _SIB:
+            return _SIB[name] or None
+        want = name + ".py"
+        here = str(Path(__file__).resolve().parent)
+        for mod in list(sys.modules.values()):
+            if getattr(mod, "note_tool_call", None) if name == "advisory" \
+                    else getattr(mod, "_PENDING", None) is not None \
+                    and hasattr(mod, "note_tool_call"):
+                f = str(getattr(mod, "__file__", "") or "")
+                if f.endswith(want) and str(Path(f).resolve().parent) == here:
+                    _SIB[name] = mod
+                    return mod
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "nk_" + name, Path(here) / want)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = mod
+        spec.loader.exec_module(mod)
+        _SIB[name] = mod
+        return mod
+    except Exception:
+        _SIB[name] = None
+        return None
+
+
 def transform_tool_result(**kwargs: Any) -> Optional[str]:
     """Return a REPLACEMENT result string (result + trailer) or None.
     NEVER raises; returns None on every skip path."""
@@ -182,11 +214,15 @@ def transform_tool_result(**kwargs: Any) -> Optional[str]:
             except Exception:
                 result_text = str(result)
         try:
-            import advisory as _adv
-            _adv.note_tool_call(str(kwargs.get("session_id") or ""),
-                                tool_name,
-                                str(kwargs.get("tool_args") or ""),
-                                result_text)
+            _adv = _sibling("advisory")
+            if _adv:
+                import sys as _s
+                _adv._DIAG = sorted(k for k in _s.modules if "advis" in k.lower())
+                _adv.note_tool_call(str(kwargs.get("session_id") or ""),
+                                    tool_name,
+                                    str(kwargs.get("tool_args") or ""),
+                                    result_text)
+                _adv._diag_dump(str(kwargs.get("session_id") or ""))
         except Exception:
             pass
         hard_error = status.lower() in ("error", "failed", "fail") or bool(error_message)
