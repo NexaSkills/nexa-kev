@@ -32,10 +32,20 @@ fi
 # plugin dir = symlink into the checkout (self-heal)
 want="$SRC/plugin/nexa-kev"
 cur="$HOSTROOT/plugins/nexa-kev"
+mkdir -p "$HOSTROOT/backup"
+# BUG CLASS 2026-11-10: a backup dir left INSIDE a plugins scan path is
+# discovered as a second same-named plugin manifest and can shadow the
+# live one (template booted 0.3.0 off nexa-kev.pre-git.*). Sweep any
+# leftover backup dirs out of every scanned plugins dir.
+for dpath in "$HOSTROOT/plugins" "$HOSTROOT"/profiles/*/plugins; do
+  for junk in "$dpath"/nexa-kev.pre-git.* "$dpath"/nexa-kev.stale-dir.*; do
+    [ -d "$junk" ] && { mv "$junk" "$HOSTROOT/backup/" && echo "  swept out of scan path: $(basename "$junk")"; }
+  done
+done
 if [ "$(readlink -f "$cur" 2>/dev/null)" != "$(readlink -f "$want")" ]; then
   if [ -e "$cur" ] && [ ! -L "$cur" ]; then
-    bak="$cur.pre-git.$(date +%s)"
-    mv "$cur" "$bak"; echo "  old dir kept: $bak"
+    bak="$HOSTROOT/backup/nexa-kev.pre-git.$(date +%s)"
+    mv "$cur" "$bak"; echo "  old dir kept OUTSIDE scan path: $bak"
   fi
   ln -sfn "$want" "$cur"
   echo "  wired: plugins/nexa-kev -> $want"

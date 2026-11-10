@@ -44,10 +44,15 @@ for p in "${PROFILES[@]}"; do
   case "$p" in profiles|*) ;; esac   # skip recursive nonsense dir name
   [ "$p" = "profiles" ] && continue  # ghost dir ~/.hermes/profiles/profiles
   mkdir -p "$HOSTROOT/profiles/$p/plugins"
+  # sweep any legacy in-scan-path backups (shadowing bug class 2026-11-10)
+  for junk in "$HOSTROOT/profiles/$p/plugins"/nexa-kev.pre-git.* "$HOSTROOT/profiles/$p/plugins"/nexa-kev.stale-dir.*; do
+    [ -d "$junk" ] && { mkdir -p "$HOSTROOT/backup" && mv "$junk" "$HOSTROOT/backup/$p-$(basename "$junk")"; echo "  swept backup out of scan path: $p/$(basename "$junk")"; }
+  done
   link="$HOSTROOT/profiles/$p/plugins/nexa-kev"
   if [ -e "$link" ] && [ ! -L "$link" ]; then
-    mv "$link" "$link.stale-dir.$(date +%s)"
-    echo "  moved stale dir aside: $link.stale-dir.*"
+    mkdir -p "$HOSTROOT/backup"
+    mv "$link" "$HOSTROOT/backup/$(basename "$p")-nexa-kev.stale-dir.$(date +%s)"
+    echo "  moved stale dir to backup/ (outside scan path)"
   fi
   ln -sfn "$HOSTROOT/plugins/nexa-kev" "$link"
   [ "$(readlink -f "$link")" = "$(readlink -f "$HOSTROOT/plugins/nexa-kev")" ] \

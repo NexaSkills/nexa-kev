@@ -14,8 +14,24 @@ bad()  { printf 'FAIL  %s\n' "$*"; fail=1; }
 VER=$(grep -m1 '^version' "$HERMES_HOME/plugins/nexa-kev/plugin.yaml" 2>/dev/null | tr -d '"' | awk '{print $2}')
 note "      plugin version: ${VER:-?}"
 
-linked=$(find "$HERMES_HOME/profiles" -maxdepth 3 -name nexa-kev -type l 2>/dev/null | wc -l)
-[ "${linked:-0}" -ge 1 ] && ok "profile symlink(s): $linked" || bad "no profile symlink"
+if [ -d "$HERMES_HOME/profiles" ] && [ -n "$(ls "$HERMES_HOME/profiles" 2>/dev/null)" ]; then
+  linked=$(find "$HERMES_HOME/profiles" -maxdepth 3 -name nexa-kev \( -type l -o -type d \) 2>/dev/null | grep -v stale-dir | wc -l)
+  [ "${linked:-0}" -ge 1 ] && ok "profile plugin dir(s) present: $linked" || bad "no profile plugin dir"
+else
+  ok "single-surface host (no profiles dir)"
+fi
+
+# duplicate-manifest shadowing (bug class 2026-11-10: two dirs named
+# nexa-kev* in the scan path -> loader may boot the WRONG version)
+ROOTVER_EARLY=$(grep -m1 '^version' "$HERMES_HOME/plugins/nexa-kev/plugin.yaml" 2>/dev/null | tr -d '"' | awk '{print $2}')
+shadow=""
+for d in "$HERMES_HOME"/plugins/nexa-kev* "$HERMES_HOME"/plugins/nexa-kev-src/plugin/nexa-kev "$HERMES_HOME"/profiles/*/plugins/nexa-kev*; do
+  [ -f "$d/plugin.yaml" ] || continue
+  case "$d" in */backup/*) continue ;; esac
+  v=$(grep -m1 '^version' "$d/plugin.yaml" | tr -d '"' | awk '{print $2}')
+  [ "$v" = "$ROOTVER_EARLY" ] || shadow="$shadow $d=$v"
+done
+[ -z "$shadow" ] && ok "no shadowing duplicate manifests" || bad "duplicate nexa-kev manifests with DIFFERENT versions in scan path:$shadow"
 
 enabled=$(hermes config get plugins.enabled 2>/dev/null | grep -c nexa-kev)
 [ "${enabled:-0}" -ge 1 ] && ok "enabled (root config)" || note "WARN  not in root plugins.enabled (profile-level may still serve it)"
