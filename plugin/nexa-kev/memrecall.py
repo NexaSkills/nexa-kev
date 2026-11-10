@@ -91,7 +91,14 @@ def _pick_int(key: str, default: int) -> int:
 
 def _log(rec: Dict[str, Any]) -> None:
     try:
-        d = Path(_config._pick("PROFILE_HOME", "") or Path.home() / ".hermes")
+        _ph = str(_config._pick("PROFILE_HOME", "") or "").strip()
+        d = Path(_ph) if _ph else None
+        if d is None:
+            try:
+                from hermes_constants import get_hermes_home
+                d = Path(get_hermes_home())
+            except Exception:
+                d = Path.home() / ".hermes"
         d = d / "plugins-data" / "nexa-kev"
         d.mkdir(parents=True, exist_ok=True)
         with (d / "decisions.jsonl").open("a", encoding="utf-8") as fh:
