@@ -23,3 +23,21 @@ for UNIT in "${UNITS[@]}"; do
 } >> "$LOG" 2>&1
   tail -3 "$LOG"
 done
+
+# 2026-11-10: on the QEMU-guest hosts (trade/clone) there is no gateway
+# unit; the resident session server is `hermes dashboard` autostarted at
+# boot. A plugin rollout that only bounced units left it running PRE-ROLLOUT
+# code in memory (bank decisions and lane rows silently came from the old
+# build). Recycle it with identical argv so the customer's dashboard comes
+# back on the same port with the fresh plugin code.
+for PID in $(pgrep -f "dashboard --host" 2>/dev/null); do
+  [ "$PID" = "$$" ] && continue
+  CMD=$(tr '\0' ' ' < "/proc/$PID/cmdline" 2>/dev/null)
+  case "$CMD" in *hermes*) ;; *) continue ;; esac
+  echo "=== $(date -Is) recycling standalone dashboard pid $PID" >> "$LOG"
+  kill "$PID" 2>/dev/null
+  sleep 3
+  kill -0 "$PID" 2>/dev/null && kill -9 "$PID" 2>/dev/null
+  setsid nohup $CMD >>/tmp/nexa-kev-dashboard.log 2>&1 &
+  echo "dashboard respawn requested (see /tmp/nexa-kev-dashboard.log)" >> "$LOG"
+done
