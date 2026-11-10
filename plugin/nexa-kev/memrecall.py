@@ -216,13 +216,10 @@ def transform_tool_result(**kwargs: Any) -> Optional[str]:
         try:
             _adv = _sibling("advisory")
             if _adv:
-                import sys as _s
-                _adv._DIAG = sorted(k for k in _s.modules if "advis" in k.lower())
                 _adv.note_tool_call(str(kwargs.get("session_id") or ""),
                                     tool_name,
                                     str(kwargs.get("tool_args") or ""),
                                     result_text)
-                _adv._diag_dump(str(kwargs.get("session_id") or ""))
         except Exception:
             pass
         hard_error = status.lower() in ("error", "failed", "fail") or bool(error_message)

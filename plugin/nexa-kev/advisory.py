@@ -221,30 +221,6 @@ def _tick(session_key: str, cfg: Any) -> None:
         _emit(cfg, session_key[-64:], pend)
 
 
-_DIAG_LAST: Dict[str, float] = {}
-
-
-def _diag_dump(session_key: str) -> None:
-    """TEMP instrumentation: prove whether transform's advisory instance
-    is the same object pre_llm registered into."""
-    try:
-        key = (session_key or "default")[-64:]
-        now = time.time()
-        if now - _DIAG_LAST.get(key, 0) < 60:
-            return
-        _DIAG_LAST[key] = now
-        try:
-            cfg = _config.NexaKevConfig.load()
-        except Exception:
-            cfg = None
-        _log_decision(cfg, kind="diag", session=session_key[-24:],
-                      mods=getattr(sys.modules[__name__], "_DIAG", []),
-                      pending_keys=sorted(_PENDING)[-3:],
-                      has_this=any(k == key for k in _PENDING))
-    except Exception:
-        pass
-
-
 def note_tool_call(session_key: str, tool_name: str, args_text: str,
                    result_text: str) -> None:
     """Called (fail-open) from memrecall's transform for EVERY tool result."""
