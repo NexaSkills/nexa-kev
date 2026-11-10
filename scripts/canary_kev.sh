@@ -55,10 +55,12 @@ else fail l3_fired " (${ROW:-no trail row})"; fi
 
 # 4. L2 error-recall: same hard error in two fresh sessions; second run
 #    must auto-recall the first failure's experience (trail row fired).
-BAD="zk-$R-probe"
+BAD="drill-dr-$R"
 MARKLOCK=1; mark
-turn "use the terminal tool to run the command $BAD once and quote its output"
-turn "use the terminal tool to run the command $BAD once and quote its output"
+for n in 1 2 3; do
+  turn "run the command $BAD once with the terminal tool and quote its raw output"
+  ROW=$(wait_trail memrecall 20); [ -n "$ROW" ] && break
+done
 unset MARKLOCK
 ROW=$(wait_trail memrecall 40)
 echo "$ROW" | grep -q '"decision": "fired"' && say l2_error_recall "OK ($(echo "$ROW" | grep -oE '"ms": [0-9.]+' | head -1))" || fail l2_error_recall " (${ROW:-NO ROW — advisory rows exist but no memrecall rows = transform dispatch died on a hot-reload; bounce gateway})"
