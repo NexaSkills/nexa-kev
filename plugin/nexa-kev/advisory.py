@@ -158,6 +158,65 @@ def _log_decision(cfg: Any, **entry: Any) -> None:
         pass
 
 
+# ---- outcome tracking -------------------------------------------------
+# After an advisory fires we watch the SAME session for proof the agent
+# took (or ignored) the advice: a skill_view of a suggested skill counts
+# as used=1; any tool error before expiry counts as later_error=1. One
+# "advisory_outcome" row per fired advisory = ranking-quality curve for
+# free (and feeds the usage prior into later asks).
+_PENDING: Dict[str, Dict[str, Any]] = {}
+_PENDING_MAX = 200
+_PENDING_MAX_TURNS = 8
+_PENDING_MAX_AGE = 900.0
+_ERR_RE = re.compile(
+    r"(command not found|No such file|Permission denied|Traceback|"
+    r"exit code [1-9]\d*|error:|failed)", re.I)
+
+
+def _emit(cfg: Any, key: str, pend: Dict[str, Any]) -> None:
+    try:
+        _log_decision(cfg, kind="advisory_outcome", session=pend.get("session"),
+                      suggested=sorted(pend["skills"])[:3],
+                      used=pend.get("used") or 0,
+                      later_error=1 if pend.get("err") else 0,
+                      turns=pend.get("turns", 0),
+                      age_s=round(time.time() - pend["ts"], 1))
+    except Exception:
+        pass
+    _PENDING.pop(key, None)
+
+
+def _tick(session_key: str, cfg: Any) -> None:
+    pend = _PENDING.get(session_key[-64:])
+    if not pend:
+        return
+    pend["turns"] = pend.get("turns", 0) + 1
+    if (pend["turns"] > _PENDING_MAX_TURNS
+            or time.time() - pend["ts"] > _PENDING_MAX_AGE):
+        _emit(cfg, session_key[-64:], pend)
+
+
+def note_tool_call(session_key: str, tool_name: str, args_text: str,
+                   result_text: str) -> None:
+    """Called (fail-open) from memrecall's transform for EVERY tool result."""
+    try:
+        pend = _PENDING.get((session_key or "default")[-64:])
+        if not pend:
+            return
+        low = ((args_text or "") + "\n" + (result_text or ""))[:1200].lower()
+        for cand in pend["skills"]:
+            if cand and re.search(r"\b" + re.escape(cand.lower()) + r"\b", low):
+                pend["used"] = cand
+                _emit(_config.NexaKevConfig.load(),
+                      (session_key or "default")[-64:], pend)
+                return
+        if _ERR_RE.search((result_text or "")[:2000]):
+            pend["err"] = 1
+    except Exception:
+        pass
+
+
+
 def pre_llm_call(**kwargs) -> Optional[Dict[str, str]]:
     """pre_llm_call hook. Returns {'context': ...} to advise, else None.
     NEVER raises — a kev outage must never surface in the turn."""
@@ -176,6 +235,7 @@ def pre_llm_call(**kwargs) -> Optional[Dict[str, str]]:
         if len(routed) > 200:
             routed.clear()
         routed[msg_hash] = True
+        _tick(session_key, cfg)
         _log_decision(cfg, kind="advisory", outcome="fired",
                       msg=user_message[:60], session=session_key[-24:])
 
@@ -230,6 +290,15 @@ def pre_llm_call(**kwargs) -> Optional[Dict[str, str]]:
             "reasonable; ignore if clearly wrong. "
             f"{ans.get('latency_ms')}ms.)"
         )
+        try:
+            if len(_PENDING) > _PENDING_MAX:
+                _PENDING.clear()
+            _PENDING[session_key[-64:]] = {
+                "session": session_key[-24:],
+                "skills": set(list(s_probs)[:3]),
+                "ts": time.time(), "turns": 0}
+        except Exception:
+            pass
         return {"context": context}
     except Exception as e:
         logger.debug("nexa-kev advisory fail-open: %s", e)

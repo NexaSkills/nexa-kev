@@ -181,6 +181,14 @@ def transform_tool_result(**kwargs: Any) -> Optional[str]:
                 result_text = json.dumps(result, ensure_ascii=False, default=str)
             except Exception:
                 result_text = str(result)
+        try:
+            import advisory as _adv
+            _adv.note_tool_call(str(kwargs.get("session_id") or ""),
+                                tool_name,
+                                str(kwargs.get("tool_args") or ""),
+                                result_text)
+        except Exception:
+            pass
         hard_error = status.lower() in ("error", "failed", "fail") or bool(error_message)
         if not hard_error and not _ERROR_TEXT_RE.search(result_text):
             return None

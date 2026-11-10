@@ -17,6 +17,7 @@ SCHEMA="mnemo2_$AGENT"
 R=$(openssl rand -hex 3)
 K1="thimblewood-$R"     # private-rule anchor
 K2="grantsmere-$R"      # fleet-doctrine anchor (should route SHARED)
+T0=$(date +%s)   # absolute floor: script start
 LOG=/tmp/canary-kev-$R.log
 fails=0
 say(){ printf '  %-24s %s\n' "$1" "$2"; }
@@ -25,9 +26,17 @@ turn(){ { [ -z "${MARKLOCK:-}" ] && mark; }; OUT=$(timeout 200 env -u HERMES_HOM
   SID=$(echo "$OUT" | grep -oE '[0-9a-f]{24,36}' | tail -1)
   echo "===== SID=$SID PROMPT=$1" >> "$LOG"; echo "$OUT" >> "$LOG"; }
 mark(){ T0=$(date +%s 2>/dev/null); }
+pick_row(){ # newest-by-ts row of kind after T0 (order/rotation robust)
+  local line ts bt=0 best=""
+  while IFS= read -r line; do
+    ts=$(printf '%s' "$line" | grep -oE '"ts": [0-9]+' | grep -oE '[0-9]+' | head -1)
+    [ -n "$ts" ] && [ "$ts" -gt "${T0:-0}" ] && [ "$ts" -gt "$bt" ] && { bt=$ts; best=$line; }
+  done < <(grep -h "\"kind\": \"$1\"" "$TRAIL" 2>/dev/null)
+  printf '%s' "$best"
+}
 wait_trail(){ # wait_trail <kind> -> row of kind written since mark() (poll)
   local end=$((SECONDS+${2:-30}))
-  until ROW=$(grep -h "\"kind\": \"$1\"" "$TRAIL" 2>/dev/null | sed -E 's/.*"ts": ([0-9]+).*/\1|&/' | awk -F'|' -v s="$T0" '$1+0>s+0 {print substr($0,index($0,"{"))}' | tail -1) [ -n "$ROW" ] || [ $SECONDS -ge $end ]; do sleep 2; done
+  until ROW=$(pick_row "$1") [ -n "$ROW" ] || [ $SECONDS -ge $end ]; do sleep 2; done
   echo "${ROW:-}"; }
 
 echo "== nexa-kev decision canary (agent=$AGENT anchors=$R)"
