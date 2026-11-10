@@ -309,6 +309,15 @@ def pre_llm_call(**kwargs) -> Optional[Dict[str, str]]:
                       endpoint=ans.get("endpoint"), latency_ms=ans.get("latency_ms"),
                       session_id=kwargs.get("session_id") or "")
 
+        try:
+            if len(_PENDING) > _PENDING_MAX:
+                _PENDING.clear()
+            _PENDING[session_key[-64:]] = {
+                "session": session_key[-24:],
+                "skills": set(list(s_probs)[:3]),
+                "ts": time.time(), "turns": 0}
+        except Exception:
+            pass
         skill_hint = _hint("skill: ", s_probs, cfg) or _hint_rel("skill: ", s_probs, cfg)
         tool_hint = _hint("tool: ", t_probs, cfg) or _hint_rel("tool: ", t_probs, cfg)
         if not (skill_hint or tool_hint):
@@ -320,15 +329,6 @@ def pre_llm_call(**kwargs) -> Optional[Dict[str, str]]:
             "reasonable; ignore if clearly wrong. "
             f"{ans.get('latency_ms')}ms.)"
         )
-        try:
-            if len(_PENDING) > _PENDING_MAX:
-                _PENDING.clear()
-            _PENDING[session_key[-64:]] = {
-                "session": session_key[-24:],
-                "skills": set(list(s_probs)[:3]),
-                "ts": time.time(), "turns": 0}
-        except Exception:
-            pass
         return {"context": context}
     except Exception as e:
         logger.debug("nexa-kev advisory fail-open: %s", e)
