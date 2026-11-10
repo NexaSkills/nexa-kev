@@ -58,7 +58,7 @@ else fail l3_fired " (${ROW:-no trail row})"; fi
 BAD="drill-dr-$R"
 MARKLOCK=1; mark
 for n in 1 2 3; do
-  turn "use the terminal tool to run the command $BAD once in the FOREGROUND (no backgrounding, no sleep) and quote its raw output"
+  turn "call the TERMINAL tool right now with command exactly: $BAD. Do NOT use the process tool, do not background, do not add sleep. Quote the raw output."
   ROW=$(wait_trail memrecall 20); [ -n "$ROW" ] && break
 done
 unset MARKLOCK
