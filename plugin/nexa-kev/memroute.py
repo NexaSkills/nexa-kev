@@ -99,7 +99,12 @@ def pre_tool_call(tool_name: str = "", args: Optional[Dict[str, Any]] = None, **
                 "ms": round((time.monotonic() - t0) * 1000, 1), "ts": time.time()})
             return {"action": "block", "message": msg}
         # gate 2: kev ensemble — should this stay private?
-        r = _kd.decide(_AGENT_SCOPED_HINT + content[:900],
+        try:
+            import askctx as _ctx
+            _pre = _ctx.preamble(content[:900])
+        except Exception:
+            _pre = ""
+        r = _kd.decide(_pre + _AGENT_SCOPED_HINT + content[:900],
                        ["Should this memory stay in the agent's PRIVATE bank "
                         "rather than the shared bank?"])
         d = (r.get("decisions") or {}).get("q1") or {}

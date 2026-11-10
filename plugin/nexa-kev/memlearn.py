@@ -218,6 +218,11 @@ def pre_llm_call(**kwargs: Any) -> Optional[Dict[str, str]]:
                     f"{_last_assistant_tail(kwargs.get('conversation_history'))}"
                     if isinstance(kwargs.get("conversation_history"), list)
                     else ""))
+        try:
+            import askctx as _ctx
+            state = _ctx.preamble(user_msg[:900]) + state
+        except Exception:
+            pass
         r = _kd.decide(state, [_Q_SAVE, _Q_BANK])
         ds = r.get("decisions") or {}
         d1 = ds.get("q1") or {}
