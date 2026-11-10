@@ -103,3 +103,26 @@ def test_three_notes_flush_fast(monkeypatch):
     for i in range(3):
         advisory.note_tool_call("sess-abc", "terminal", "", "fine")
     assert rows and rows[0]["used"] == 0
+
+
+class _CfgLog:
+    def __init__(self, p):
+        self.decision_log = str(p)
+
+
+def test_priors_digest_counts(tmp_path):
+    p = tmp_path / "d.jsonl"
+    p.write_text(
+        '{"kind": "advisory_outcome", "suggested": ["pdf", "arxiv", "spike"], "used": "pdf"}\n'
+        '{"kind": "advisory_outcome", "suggested": ["arxiv", "pdf", "x"], "used": 0}\n'
+        '{"kind": "advisory", "noise": 1}\n')
+    d = advisory._priors_digest(_CfgLog(p))
+    assert "pdf(u=1,i=1)" in d and "arxiv(u=0,i=2)" in d
+    assert d.endswith("\n")
+
+
+def test_priors_digest_empty_and_missing(tmp_path):
+    p = tmp_path / "d.jsonl"
+    p.write_text('{"kind": "advisory"}\n')
+    assert advisory._priors_digest(_CfgLog(p)) == ""
+    assert advisory._priors_digest(_CfgLog(tmp_path / "nope.jsonl")) == ""

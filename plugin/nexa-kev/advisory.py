@@ -249,6 +249,50 @@ def note_tool_call(session_key: str, tool_name: str, args_text: str,
 
 
 
+def _flag(key: str, default: str = "1") -> bool:
+    try:
+        v = str(_config._pick(key, default) or default).strip().lower()
+    except Exception:
+        v = default
+    return v not in ("0", "false", "off", "no")
+
+
+def _priors_digest(cfg: Any) -> str:
+    """Deterministic usage prior from recent advisory_outcome rows:
+    skills demonstrably used (u=) vs ignored (i=) after advisories.
+    Dark behind NEXA_KEV_PRIORS (default off)."""
+    try:
+        path = str(cfg.decision_log)
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            fh.seek(max(0, __import__("os").stat(path).st_size - 65536))
+            lines = fh.read().splitlines()[-400:]
+        used: Dict[str, int] = {}
+        ign: Dict[str, int] = {}
+        rows = 0
+        for ln in lines:
+            try:
+                r = json.loads(ln)
+            except Exception:
+                continue
+            if r.get("kind") != "advisory_outcome":
+                continue
+            rows += 1
+            u = r.get("used") or 0
+            for cand in (r.get("suggested") or []):
+                if u == cand:
+                    used[cand] = used.get(cand, 0) + 1
+                else:
+                    ign[cand] = ign.get(cand, 0) + 1
+        if not rows:
+            return ""
+        names = sorted(set(used) | set(ign))[:8]
+        parts = [f"{n}(u={used.get(n, 0)},i={ign.get(n, 0)})" for n in names]
+        return ("outcome-prior from last " + str(rows)
+                + " advisory results: " + ", ".join(parts) + "\n")
+    except Exception:
+        return ""
+
+
 def pre_llm_call(**kwargs) -> Optional[Dict[str, str]]:
     """pre_llm_call hook. Returns {'context': ...} to advise, else None.
     NEVER raises — a kev outage must never surface in the turn."""
@@ -295,6 +339,8 @@ def pre_llm_call(**kwargs) -> Optional[Dict[str, str]]:
             return None
 
         state = user_message[: cfg.max_state_chars]
+        if _flag("PRIORS", "0"):
+            state = (_priors_digest(cfg) + state)[: cfg.max_state_chars * 2]
         ans = _kd.raw_request(state, questions, cfg)
         if not ans or ans.get("status") != "ok":
             return None
