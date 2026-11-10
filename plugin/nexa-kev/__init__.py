@@ -94,3 +94,15 @@ def register(ctx) -> None:
         logger.info("nexa-kev: registered pre_tool_call memory-router hook")
     except Exception as e:
         logger.warning("nexa-kev: register_hook(pre_tool_call) failed: %s", e)
+    try:
+        from . import memlearn as _ml
+        ctx.register_hook("pre_llm_call", _ml.pre_llm_call)
+        logger.info("nexa-kev: registered pre_llm_call memlearn hook")
+    except Exception as e:
+        logger.warning("nexa-kev: register_hook(pre_llm_call/memlearn) failed: %s", e)
+    try:
+        from . import memrecall as _mrc
+        ctx.register_hook("transform_tool_result", _mrc.transform_tool_result)
+        logger.info("nexa-kev: registered transform_tool_result memrecall hook")
+    except Exception as e:
+        logger.warning("nexa-kev: register_hook(transform_tool_result) failed: %s", e)

@@ -85,6 +85,59 @@ All in the profile `~/.hermes/.env` (never in code):
 | `NEXA_KEV_BASE_URLS` | gateway `/kev/systemone` endpoints | comma-separated failover |
 | `NEXA_KEV_MODEL` | `kev` | engine model name |
 | `NEXA_KEV_ENSEMBLE` / `NEXA_KEV_MEMROUTE` / `NEXA_KEV_ENABLED` | `1` | kill-switches |
+| `NEXA_KEV_MEMLEARN` | `1` | L1 learning-moment lane kill-switch |
+| `NEXA_KEV_MEMLEARN_SHADOW` | `0` | `1` = decide+log but inject nothing (rollout soak mode) |
+| `NEXA_KEV_MEMLEARN_MAX_SESSION` | `3` | max save-directives per session |
+| `NEXA_KEV_MEMRECALL` | `1` | L2 mid-task error-recall lane kill-switch |
+| `NEXA_KEV_MEMRECALL_MAX_SESSION` | `2` | max recall trailers per session |
+| `NEXA_KEV_MEMRECALL_KEVGATE` | `0` | let kev gate pattern-only (non-error) recalls (experiment) |
+
+## Self-learning memory lanes (v0.4.0)
+
+Architecture: **public plugin hooks only** (`pre_llm_call`,
+`pre_tool_call`, `transform_tool_result`) — no vendor edits, no
+monkey-patching, defensive kwargs everywhere; every lane is fail-open,
+kill-switchable and logs to `<profile>/plugins-data/nexa-kev/decisions.jsonl`.
+
+* **L1 memlearn** (pre_llm_call): a local lexical prefilter flags
+  durable-instruction messages ("from now on…", "that was good, do it like
+  that", "never do…"); candidates get one kev ensemble call deciding
+  *worth-remembering* AND *shared-vs-private bank* (criteria =
+  `config.BANK_CRITERIA`, shared verbatim with the memroute save gate).
+  Confident YES injects a save directive: recall-first (`mnemosyne_update`
+  over duplicate), then `mnemosyne_remember` / `mnemosyne_shared_remember`
+  with importance 0.7 + persistent scope. The AGENT performs the write
+  (keeps `audit_log` + memroute gates intact). Uncertain → silent.
+* **L2 memrecall** (transform_tool_result): on FAILED tool results (status
+  or error-pattern match) it recalls the private bank first, the shared
+  bank on a miss — through mnemo-pg2's own dispatch (capability probe;
+  lane runs inert if the sibling plugin is absent) — and appends a
+  "Related memory" trailer to the tool result mid-task. Budgeted,
+  query-deduped, no kev needed for hard errors.
+* **Passive recall** every turn (top-3 private + top-2 shared) remains
+  mnemo-pg2's own `pre_llm_call` prefetch (`MNEMO2_PREFETCH=1`) — L2 is
+  the deep layer on top, not a duplicate.
+
+Save/recall policy: private = the agent's own habits/history/prefs/tasks;
+shared = facts true for every agent (fleet conventions, shared infra,
+cross-agent proofs); unsure → private.
+
+Verify (after gateway bounce):
+
+* P1 learning: chat `yes, that was good, do it like that from now on —
+  always run the checker first` → the reply acknowledges a
+  `🧠 [nexa-kev memlearn]` directive and a `mnemosyne_remember` call shows
+  in the turn (check `audit_log` for the row).
+* P2 recall-on-task: start a fresh session, ask something the saved rule
+  governs → the rule surfaces in the injected memory block.
+* P3 error-recall: induce a failure whose pattern has a stored memory
+  (e.g. run the wrong interpreter twice) → tool result ends with
+  `--- Related memory (nexa-kev recall) ---`.
+* Trail: `grep -E '"kind": "(memlearn|memrecall)"' <profile>/plugins-data/nexa-kev/decisions.jsonl`
+  (`fired|fired_shadow|silent_*|capped|no_hits` verdicts with p/spread/ms).
+* v0.3.0 note: the memroute block rule now accepts `spread == 0.0`
+  (perfect agreement) — previously `spread or 1` mistook 0.0 for missing
+  and the block never fired at full agreement.
 
 ## Troubleshooting (all field-proven)
 

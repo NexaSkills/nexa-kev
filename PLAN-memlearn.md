@@ -1,6 +1,8 @@
 # PLAN: nexa-kev v0.4.0 — self-learning memory lanes (memlearn + memrecall)
 
-Status: **PROPOSED — awaiting Jan's sign-off.** No code changed yet.
+Status: **APPROVED (Jan, 2026-11-10)** — 3-lane build, agent-executed saves,
+shadow 48 h on nexa+template then ON, L2 included in v0.4.0.
+Implemented on `feat/memlearn` (offline suite 49 passed).
 Author: Devon, 2026-11-10.
 
 Goal: make agents **auto-learn** (catch learning moments and persist them in

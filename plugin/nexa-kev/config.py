@@ -37,6 +37,16 @@ DEFAULT_BASE_URLS = (
 DEFAULT_KEY_ENV = "HERMES_CUSTOM_AI_NEXASKILLS_CO_ZA_API_KEY"
 LEGACY_KEY_ENV = "KEV_ROUTER_API_KEY"  # honoured only if it is actually set
 
+# L3 (v0.4.0): ONE source of truth for the shared-vs-private bank criteria,
+# embedded verbatim in both kev questions (memroute's save gate AND
+# memlearn's bank recommendation). Change the policy here, nowhere else.
+BANK_CRITERIA = (
+    "Shared is only for facts that are true and useful for every agent: "
+    "fleet conventions, shared infrastructure, cross-agent proofs. Facts "
+    "about one agent's own habits, history, preferences, tasks or "
+    "conclusions belong in private."
+)
+
 
 def _cfg_section() -> Dict[str, Any]:
     """Return plugins.entries.nexa-kev ({} when unavailable)."""

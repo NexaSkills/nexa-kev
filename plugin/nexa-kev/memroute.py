@@ -47,13 +47,15 @@ _SECRET_RE = re.compile(
 )
 
 # agent-scoped markers: content talking about ONE agent's own habits/history
+try:
+    _BANK_CRITERIA = _config.BANK_CRITERIA
+except AttributeError:  # pragma: no cover - older config
+    _BANK_CRITERIA = ("Shared is only for facts that are true and useful "
+                      "for every agent; agent-specific facts are private.")
 _AGENT_SCOPED_HINT = (
     "The fact below was proposed for the SHARED (all-agents) memory bank. "
     "Should it instead stay in the saving agent's PRIVATE bank? "
-    "(Shared is only for facts that are true and useful for every agent: "
-    "fleet conventions, shared infrastructure, cross-agent proofs. Facts "
-    "about one agent's own habits, history, preferences, tasks or "
-    "conclusions belong in private.)\nContent: "
+    "(" + _BANK_CRITERIA + ")\nContent: "
 )
 
 
@@ -104,7 +106,10 @@ def pre_tool_call(tool_name: str = "", args: Optional[Dict[str, Any]] = None, **
         rec = {"kind": "memroute", "tool": tool_name, "ts": time.time(),
                "noul": d.get("noul"), "spread": d.get("spread"),
                "ms": round((time.monotonic() - t0) * 1000, 1)}
-        if r.get("status") == "ok" and d.get("verdict") == "SAFE/YES" and float(d.get("spread") or 1) <= 0.2:
+        _s = d.get("spread")  # 0.0 = perfect agreement (NOT missing). For a
+        # BLOCK, absence of spread (ENSEMBLE=0) is treated as disagreement:
+        # blocking a save requires positive ensemble proof (v0.3.0 doctrine).
+        if r.get("status") == "ok" and d.get("verdict") == "SAFE/YES" and _s is not None and float(_s) <= 0.2:
             rec["decision"] = "block_private"
             _log(Path(_config._pick("PROFILE_HOME", "") or Path.home() / ".hermes"), rec)
             return {"action": "block", "message": (
