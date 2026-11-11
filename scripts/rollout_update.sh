@@ -41,9 +41,13 @@ else
   echo "  cloned: $(git -C "$SRC" log -1 --format='%h %s' | cut -c1-72)"
 fi
 
-# plugin dir = symlink into the checkout (self-heal)
-want="$SRC/plugin/nexa-kev"
-cur="$HOSTROOT/plugins/nexa-kev"
+# plugin dir = REAL DIR in the hub (~/.hermes/plugins/nexa-kev),
+# materialised from the checkout (placement standard 2026-11-11: all
+# plugins RESIDE in the hub; profiles link to the hub; the checkout is
+# the single write-source, never a load path). Self-heal, fail-closed.
+want="$HOSTROOT/plugins/nexa-kev"
+src="$SRC/plugin/nexa-kev"
+MARK=".nk-hub-sync"
 mkdir -p "$HOSTROOT/backup"
 # BUG CLASS 2026-11-10: a backup dir left INSIDE a plugins scan path is
 # discovered as a second same-named plugin manifest and can shadow the
@@ -54,14 +58,30 @@ for dpath in "$HOSTROOT/plugins" "$HOSTROOT"/profiles/*/plugins; do
     [ -d "$junk" ] && { mv "$junk" "$HOSTROOT/backup/" && echo "  swept out of scan path: $(basename "$junk")"; }
   done
 done
-if [ "$(readlink -f "$cur" 2>/dev/null)" != "$(readlink -f "$want")" ]; then
-  if [ -e "$cur" ] && [ ! -L "$cur" ]; then
-    bak="$HOSTROOT/backup/nexa-kev.pre-git.$(date +%s)"
-    mv "$cur" "$bak"; echo "  old dir kept OUTSIDE scan path: $bak"
-  fi
-  ln -sfn "$want" "$cur"
-  echo "  wired: plugins/nexa-kev -> $want"
+if [ -L "$want" ]; then
+  # legacy shape (git-pull-era symlink into the checkout): retire, materialise
+  mv "$want" "$HOSTROOT/backup/nexa-kev.pre-hub.$(date +%s)"
+  echo "  retired legacy checkout-symlink to backup (outside scan path)"
+elif [ -e "$want" ] && [ ! -d "$want" ]; then
+  echo "FAIL: plugins/nexa-kev exists but is not a dir/symlink — refusing"; exit 1
+elif [ -d "$want" ] && [ ! -f "$want/$MARK" ] \
+     && [ "$(readlink -f "$want")" != "$(readlink -f "$src")" ]; then
+  echo "FAIL: plugins/nexa-kev is a real dir NOT owned by this script (no $MARK) — refusing"; exit 1
 fi
+mkdir -p "$want"
+rsync -a -c --delete --exclude __pycache__ --exclude "$MARK" "$src/" "$want/" \
+  || { echo "FAIL: materialise $src -> $want"; exit 1; }
+echo "$SRC" > "$want/$MARK"
+echo "  hub materialised: plugins/nexa-kev (from checkout $(git -C "$SRC" rev-parse --short HEAD))"
+# legacy PROFILE links pointing into the checkout (or dangling at the old
+# in-plugins checkout) -> repoint at the hub; profiles must link to HUB only
+for l in "$HOSTROOT"/profiles/*/plugins/nexa-kev; do
+  [ -L "$l" ] || continue
+  case "$(readlink "$l")" in
+    "$want") : ;;
+    "$SRC"/*|*nexa-kev-src*) ln -sfn "$want" "$l" && echo "  profile link repointed to hub: $l" ;;
+  esac
+done
 
 # profile symlinks + enable-list leg via the sanctioned installer (its
 # copy step self-skips now that the plugin dir resolves inside the repo)

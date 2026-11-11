@@ -36,7 +36,8 @@ Clone credential: the host needs a NexaSkills GitHub PAT in git's store
 (`git config --global credential.helper store` + one entry for github.com
 in `~/.git-credentials`, fleet-standard on beez/trade).
 
-The installer copies the plugin into `~/.hermes/plugins/nexa-kev`, symlinks
+The installer materializes the plugin into the hub as a real directory
+(`~/.hermes/plugins/nexa-kev`), symlinks
 it into every profile's plugins dir, enables it via `hermes config set`
 (the sanctioned path — it never hand-edits YAML), checks the LLM key, and
 runs a direct probe. Re-run any time after `git pull` to upgrade.
@@ -54,10 +55,14 @@ lives SELF-CONTAINED under the plugin tree — no `~/ops`, no projects dirs:
       bash ~/.hermes/checkout/nexa-kev/scripts/rollout_update.sh'
 
 `rollout_update.sh` is idempotent and self-healing: it `git pull`s the
-checkout (or clones it), points `~/.hermes/plugins/nexa-kev` (and every
-profile symlink) INTO the checkout so future updates are literally just a
-`git pull` + gateway bounce, and re-runs the installer legs (enable,
-symlink verify; the copy step self-skips in this layout).
+checkout (or clones it), MATERIALIZES the plugin into the hub
+(`~/.hermes/plugins/nexa-kev` as a REAL dir, `rsync -c` from the checkout,
+`.nk-hub-sync` provenance marker — placement standard 2026-11-11: the hub
+is the only load path, the checkout is the write-source; legacy
+checkout-symlinks are retired to `~/.hermes/backup/` and profile links
+repointed at the hub), and re-runs the installer legs (enable, symlink
+verify). Updates stay `git pull` + re-run + gateway bounce;
+`check_nexa_kev.sh` FAILs on hub-vs-checkout drift or off-standard links.
 Dev flow per policy: develop + full-test on the source dev host FIRST,
 then roll template, then (only when asked) other hosts.
 

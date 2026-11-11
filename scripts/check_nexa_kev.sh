@@ -11,6 +11,33 @@ ok()   { printf 'PASS  %s\n' "$*"; }
 bad()  { printf 'FAIL  %s\n' "$*"; fail=1; }
 
 [ -f "$HERMES_HOME/plugins/nexa-kev/plugin.yaml" ] && ok "plugin files present" || bad "plugin files missing under $HERMES_HOME/plugins/nexa-kev"
+
+# ---- placement standard (2026-11-11): hub is a REAL DIR, never a link
+# into the checkout; profiles link to the hub; checkout is write-source --
+HUBP="$HERMES_HOME/plugins/nexa-kev"
+if [ -L "$HUBP" ]; then
+  tgt=$(readlink -f "$HUBP")
+  case "$tgt" in
+    "$HERMES_HOME/checkout/"*) bad "hub entry is a LEGACY symlink into the checkout ($tgt) — run rollout_update.sh" ;;
+    *) bad "hub entry is a symlink ($tgt) — expected hub-resident real dir" ;;
+  esac
+elif [ -d "$HUBP" ]; then
+  # real dir = compliant placement whatever its origin (marker just names
+  # who materialised it; rollout_update re-stamps it on the next run)
+  ok "hub entry real dir$([ -f "$HUBP/.nk-hub-sync" ] && echo ' (materialised by rollout_update)' || echo ' (no .nk-hub-sync marker — vendor copy)')"
+fi
+SRC_="$HERMES_HOME/checkout/nexa-kev"
+if [ -d "$SRC_/plugin/nexa-kev" ] && [ -d "$HUBP" ] && [ ! -L "$HUBP" ]; then
+  if diff -rq -x __pycache__ -x .nk-hub-sync "$SRC_/plugin/nexa-kev" "$HUBP" >/dev/null 2>&1; then
+    ok "hub content in sync with checkout"
+  else
+    bad "hub DRIFT vs checkout (run rollout_update.sh)"
+  fi
+fi
+for pl in "$HERMES_HOME"/profiles/*/plugins/nexa-kev; do
+  [ -L "$pl" ] || continue
+  [ "$(readlink "$pl")" = "$HUBP" ] || bad "profile link not via hub: $pl -> $(readlink "$pl")"
+done
 VER=$(grep -m1 '^version' "$HERMES_HOME/plugins/nexa-kev/plugin.yaml" 2>/dev/null | tr -d '"' | awk '{print $2}')
 note "      plugin version: ${VER:-?}"
 
