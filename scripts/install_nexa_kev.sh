@@ -22,7 +22,7 @@ mkdir -p "$HOSTROOT/plugins"
 if [ "$(readlink -f "$HOSTROOT/plugins/nexa-kev" 2>/dev/null)" = "$(readlink -f "$REPO/plugin/nexa-kev")" ]; then
   echo "  plugin live via repo checkout symlink (git-pull layout) — copy skipped"
 elif command -v rsync >/dev/null; then
-  rsync -a --delete --exclude __pycache__ "$REPO/plugin/nexa-kev/" "$HOSTROOT/plugins/nexa-kev/"
+  rsync -a --delete --exclude __pycache__ --exclude .nk-hub-sync "$REPO/plugin/nexa-kev/" "$HOSTROOT/plugins/nexa-kev/"
 else
   rm -rf "$HOSTROOT/plugins/nexa-kev"
   cp -r "$REPO/plugin/nexa-kev" "$HOSTROOT/plugins/nexa-kev"
