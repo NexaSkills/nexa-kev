@@ -65,8 +65,11 @@ if [ -L "$want" ]; then
 elif [ -e "$want" ] && [ ! -d "$want" ]; then
   echo "FAIL: plugins/nexa-kev exists but is not a dir/symlink — refusing"; exit 1
 elif [ -d "$want" ] && [ ! -f "$want/$MARK" ] \
-     && [ "$(readlink -f "$want")" != "$(readlink -f "$src")" ]; then
-  echo "FAIL: plugins/nexa-kev is a real dir NOT owned by this script (no $MARK) — refusing"; exit 1
+     && ! diff -rq -x __pycache__ -x "$MARK" "$src" "$want" >/dev/null 2>&1; then
+  # marker-less real dir whose content MATCHES the checkout is our own
+  # pre-marker era (installer rsync predates the marker) — proceed and
+  # re-stamp; a DIFFERENT content real dir is vendor, refuse
+  echo "FAIL: plugins/nexa-kev is a real dir NOT owned by this script (no $MARK, content differs) — refusing"; exit 1
 fi
 mkdir -p "$want"
 rsync -a -c --delete --exclude __pycache__ --exclude "$MARK" "$src/" "$want/" \
