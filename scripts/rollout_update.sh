@@ -79,11 +79,18 @@ echo "  hub materialised: plugins/nexa-kev (from checkout $(git -C "$SRC" rev-pa
 # legacy PROFILE links pointing into the checkout (or dangling at the old
 # in-plugins checkout) -> repoint at the hub; profiles must link to HUB only
 for l in "$HOSTROOT"/profiles/*/plugins/nexa-kev; do
-  [ -L "$l" ] || continue
-  case "$(readlink "$l")" in
-    "$want") : ;;
-    "$SRC"/*|*nexa-kev-src*) ln -sfn "$want" "$l" && echo "  profile link repointed to hub: $l" ;;
-  esac
+  [ -e "$l" ] || [ -L "$l" ] || continue
+  if [ -L "$l" ]; then
+    case "$(readlink "$l")" in
+      "$want") : ;;
+      "$SRC"/*|*nexa-kev-src*) ln -sfn "$want" "$l" && echo "  profile link repointed to hub: $l" ;;
+    esac
+  else
+    # REAL DIR profile surface = the drift bug class of 2026-11-10 (booted
+    # a stale version off it): back it up OUTSIDE the scan path, link to hub
+    mv "$l" "$HOSTROOT/backup/$(basename "$(dirname "$(dirname "$l")")").nexa-kev.stale-dir.$(date +%s)" \
+      && ln -sfn "$want" "$l" && echo "  profile real dir -> hub link: $l"
+  fi
 done
 
 # profile symlinks + enable-list leg via the sanctioned installer (its

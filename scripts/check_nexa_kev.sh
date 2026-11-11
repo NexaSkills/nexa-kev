@@ -35,8 +35,12 @@ if [ -d "$SRC_/plugin/nexa-kev" ] && [ -d "$HUBP" ] && [ ! -L "$HUBP" ]; then
   fi
 fi
 for pl in "$HERMES_HOME"/profiles/*/plugins/nexa-kev; do
-  [ -L "$pl" ] || continue
-  [ "$(readlink "$pl")" = "$HUBP" ] || bad "profile link not via hub: $pl -> $(readlink "$pl")"
+  [ -e "$pl" ] || [ -L "$pl" ] || continue
+  if [ -L "$pl" ]; then
+    [ "$(readlink "$pl")" = "$HUBP" ] || bad "profile link not via hub: $pl -> $(readlink "$pl")"
+  else
+    bad "profile surface is a REAL DIR (drift class): $pl — run rollout_update.sh"
+  fi
 done
 VER=$(grep -m1 '^version' "$HERMES_HOME/plugins/nexa-kev/plugin.yaml" 2>/dev/null | tr -d '"' | awk '{print $2}')
 note "      plugin version: ${VER:-?}"
