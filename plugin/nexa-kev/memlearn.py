@@ -89,6 +89,10 @@ _Q_BANK = (
 _SEEN: Dict[str, float] = {}          # message-hash -> ts
 _FIRED: Dict[str, int] = {}            # session_key  -> directives fired
 _MAX_SEEN = 4096
+# per-session directives cap default (was 3; raised with the memrecall
+# session-cap bump 2026-11-11 for fleet consistency). Env
+# NEXA_KEV_MEMLEARN_MAX_SESSION overrides.
+_MAX_SESSION_DEFAULT = 6
 
 
 def _flag(key: str, default: str = "1") -> bool:
@@ -207,7 +211,7 @@ def pre_llm_call(**kwargs: Any) -> Optional[Dict[str, str]]:
         if not _LEARN_RE.search(user_msg):
             return None            # prefilter miss: zero gateway cost
         # budget: directives per session (learning moments are rare)
-        cap = _pick_int("MEMLEARN_MAX_SESSION", 3)
+        cap = _pick_int("MEMLEARN_MAX_SESSION", _MAX_SESSION_DEFAULT)
         if _FIRED.get(session_key, 0) >= cap:
             _log({"kind": "memlearn", "decision": "capped",
                   "session": session_key, "ts": time.time()})

@@ -17,7 +17,7 @@ Design stance:
   * The error lane needs no kev (an error is an unambiguous recall
     trigger). For pattern-only ("ambiguous") results, set
     NEXA_KEV_MEMRECALL_KEVGATE=1 to let a kev ensemble question decide.
-  * Budget: NEXA_KEV_MEMRECALL_MAX_SESSION trailers/session (default 2),
+  * Budget: NEXA_KEV_MEMRECALL_MAX_SESSION trailers/session (default 8),
     identical-query dedup. Kill: NEXA_KEV_MEMRECALL=0.
 
 Log rows: kind=memrecall (decision: fired | no_hits | silent_budget |
@@ -72,6 +72,9 @@ _Q_RECALL = (
 _FIRED: Dict[str, int] = {}
 _QUERY_SEEN: Dict[str, float] = {}
 _MAX_Q = 4096
+# per-session fire cap default (was 2; 2026-11-11 busy-host canary class —
+# see tests/test_caps.py). Env NEXA_KEV_MEMRECALL_MAX_SESSION overrides.
+_MAX_SESSION_DEFAULT = 8
 
 
 def _flag(key: str, default: str = "1") -> bool:
@@ -234,7 +237,7 @@ def transform_tool_result(**kwargs: Any) -> Optional[str]:
         if len(_QUERY_SEEN) > _MAX_Q:
             _QUERY_SEEN.clear()
         _QUERY_SEEN[qhash] = time.time()
-        cap = _pick_int("MEMRECALL_MAX_SESSION", 2)
+        cap = _pick_int("MEMRECALL_MAX_SESSION", _MAX_SESSION_DEFAULT)
         if _FIRED.get(session_key, 0) >= cap:
             _log({"kind": "memrecall", "decision": "silent_budget",
                   "tool": tool_name, "session": session_key, "ts": time.time()})

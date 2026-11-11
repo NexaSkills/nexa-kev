@@ -113,9 +113,9 @@ All in the profile `~/.hermes/.env` (never in code):
 | `NEXA_KEV_ENSEMBLE` / `NEXA_KEV_MEMROUTE` / `NEXA_KEV_ENABLED` | `1` | kill-switches |
 | `NEXA_KEV_MEMLEARN` | `1` | L1 learning-moment lane kill-switch |
 | `NEXA_KEV_MEMLEARN_SHADOW` | `0` | `1` = decide+log but inject nothing (rollout soak mode) |
-| `NEXA_KEV_MEMLEARN_MAX_SESSION` | `3` | max save-directives per session |
+| `NEXA_KEV_MEMLEARN_MAX_SESSION` | `6` | max save-directives per session (raised 2026-11-11 from 3) |
 | `NEXA_KEV_MEMRECALL` | `1` | L2 mid-task error-recall lane kill-switch |
-| `NEXA_KEV_MEMRECALL_MAX_SESSION` | `2` | max recall trailers per session |
+| `NEXA_KEV_MEMRECALL_MAX_SESSION` | `8` | max recall trailers per session (raised 2026-11-11 from 2 — busy-session `silent_budget` class) |
 | `NEXA_KEV_MEMRECALL_SHADOW` | `0` | `1` = probe+log recall candidates but append nothing (soak mode) |
 | `NEXA_KEV_MEMRECALL_KEVGATE` | `0` | let kev gate pattern-only (non-error) recalls (experiment) |
 
