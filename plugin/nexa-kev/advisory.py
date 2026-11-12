@@ -242,6 +242,16 @@ def note_tool_call(session_key: str, tool_name: str, args_text: str,
             _emit(_config.NexaKevConfig.load(),
                   (session_key or "default")[-64:], pend)
             return
+        # Bridge-routed plugin calls: transform sees tool_name="tool_call";
+        # the actual callee is the "name" argument. tool_search/tool_describe
+        # mentioning names does NOT count — only an executed call does.
+        if tool_name == "tool_call" and pend.get("tools"):
+            m = re.search(r'"name"\s*:\s*"([A-Za-z0-9_\-]+)"', args_text or "")
+            if m and m.group(1) in pend["tools"]:
+                pend["used_tool"] = m.group(1)
+                _emit(_config.NexaKevConfig.load(),
+                      (session_key or "default")[-64:], pend)
+                return
         low = ((args_text or "") + "\n" + (result_text or ""))[:1200].lower()
         for cand in pend["skills"]:
             if cand and re.search(r"\b" + re.escape(cand.lower()) + r"\b", low):

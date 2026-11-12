@@ -164,3 +164,22 @@ def test_no_tools_pending_still_works(monkeypatch):
     advisory._PENDING["sess-abc"]["ts"] = time.time() - 10_000
     advisory._tick("sess-abc", _Cfg())
     assert rows and rows[0]["used_tool"] == 0 and rows[0]["tools"] == []
+
+
+def test_bridge_call_counts_as_use(monkeypatch):
+    rows = _capture(monkeypatch)
+    advisory._PENDING.clear()
+    _arm_tools()
+    advisory.note_tool_call("sess-abc", "tool_call",
+                            '{"name": "kev_decide", "arguments": {}}', "{}")
+    assert len(rows) == 1 and rows[0]["used_tool"] == "kev_decide"
+
+
+def test_describe_mention_is_not_a_use(monkeypatch):
+    rows = _capture(monkeypatch)
+    advisory._PENDING.clear()
+    _arm_tools(ts=time.time() - 10_000)
+    advisory.note_tool_call("sess-abc", "tool_describe",
+                            '{"name": "kev_decide"}', '{"description": ""}')
+    advisory._tick("sess-abc", _Cfg())
+    assert rows and rows[0]["used_tool"] == 0
