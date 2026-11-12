@@ -127,3 +127,40 @@ def test_priors_digest_empty_and_missing(tmp_path):
     p.write_text('{"kind": "advisory"}\n')
     assert advisory._priors_digest(_CfgLog(p)) == ""
     assert advisory._priors_digest(_CfgLog(tmp_path / "nope.jsonl")) == ""
+
+
+def _arm_tools(session="sess-abc", tools=("kev_decide", "terminal"), ts=None):
+    advisory._PENDING[session[-64:]] = {
+        "session": session[-24:], "skills": set(),
+        "tools": set(tools), "ts": ts or time.time(), "turns": 0}
+
+
+def test_used_tool_emits_immediately(monkeypatch):
+    rows = _capture(monkeypatch)
+    advisory._PENDING.clear()
+    _arm_tools()
+    advisory.note_tool_call("sess-abc", "kev_decide", '{"state": "x"}', "{}")
+    assert len(rows) == 1 and rows[0]["kind"] == "advisory_outcome"
+    assert rows[0]["used_tool"] == "kev_decide"
+    assert "kev_decide" in rows[0]["tools"]
+    assert "sess-abc"[-64:] not in advisory._PENDING
+
+
+def test_unnamed_tool_expiry_row_lists_candidates(monkeypatch):
+    rows = _capture(monkeypatch)
+    advisory._PENDING.clear()
+    _arm_tools(ts=time.time() - 10_000)
+    advisory.note_tool_call("sess-abc", "read_file", "{}", "ok")  # not a candidate
+    advisory._tick("sess-abc", _Cfg())
+    assert rows and rows[0]["used_tool"] == 0
+    assert rows[0]["tools"] == ["kev_decide", "terminal"]
+
+
+def test_no_tools_pending_still_works(monkeypatch):
+    rows = _capture(monkeypatch)
+    advisory._PENDING.clear()
+    _arm(skills=("pdf",))                     # old-shape row: no tools key
+    advisory.note_tool_call("sess-abc", "terminal", "{}", "boom failed")
+    advisory._PENDING["sess-abc"]["ts"] = time.time() - 10_000
+    advisory._tick("sess-abc", _Cfg())
+    assert rows and rows[0]["used_tool"] == 0 and rows[0]["tools"] == []

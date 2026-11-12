@@ -188,6 +188,8 @@ def _flush_all() -> None:
                           session=pend.get("session"),
                           suggested=sorted(pend["skills"])[:3],
                           used=pend.get("used") or 0,
+                          tools=sorted(pend.get("tools") or [])[:3],
+                          used_tool=pend.get("used_tool") or 0,
                           later_error=1 if pend.get("err") else 0,
                           turns=pend.get("turns", 0), exit_flush=True)
         except Exception:
@@ -203,6 +205,8 @@ def _emit(cfg: Any, key: str, pend: Dict[str, Any]) -> None:
         _log_decision(cfg, kind="advisory_outcome", session=pend.get("session"),
                       suggested=sorted(pend["skills"])[:3],
                       used=pend.get("used") or 0,
+                      tools=sorted(pend.get("tools") or [])[:3],
+                      used_tool=pend.get("used_tool") or 0,
                       later_error=1 if pend.get("err") else 0,
                       turns=pend.get("turns", 0),
                       age_s=round(time.time() - pend["ts"], 1))
@@ -229,6 +233,15 @@ def note_tool_call(session_key: str, tool_name: str, args_text: str,
         if not pend:
             return
         pend["notes"] = pend.get("notes", 0) + 1
+        # Tool-lane adoption: the agent called a tool the advisory NAMED,
+        # under its exact registry name. (Bridge describe can render plugin
+        # tool schemas empty, so an unnamed call is invisible to the model;
+        # a call of a named tool is proof the steering worked.)
+        if tool_name and pend.get("tools") and tool_name in pend["tools"]:
+            pend["used_tool"] = tool_name
+            _emit(_config.NexaKevConfig.load(),
+                  (session_key or "default")[-64:], pend)
+            return
         low = ((args_text or "") + "\n" + (result_text or ""))[:1200].lower()
         for cand in pend["skills"]:
             if cand and re.search(r"\b" + re.escape(cand.lower()) + r"\b", low):
@@ -364,6 +377,7 @@ def pre_llm_call(**kwargs) -> Optional[Dict[str, str]]:
             _PENDING[session_key[-64:]] = {
                 "session": session_key[-24:],
                 "skills": set(list(s_probs)[:3]),
+                "tools": set(list(t_probs)[:3]),
                 "ts": time.time(), "turns": 0}
         except Exception:
             pass
@@ -378,6 +392,16 @@ def pre_llm_call(**kwargs) -> Optional[Dict[str, str]]:
             "reasonable; ignore if clearly wrong. "
             f"{ans.get('latency_ms')}ms.)"
         )
+        # The tool_search bridge renders ctx-registered plugin tools with an
+        # EMPTY schema (host-core deferral layer), so kev_decide's args are
+        # invisible in tool_describe. Spell the call shape inline whenever
+        # kev_decide is ranked — a zero-knowledge agent can then call it
+        # correctly without guessing (empty-args guesses fail as no_questions).
+        if "kev_decide" in (tool_hint or ""):
+            context += ("\nkev_decide args (bridge may show its schema as empty): "
+                        'state=<string: current factual situation>, '
+                        'questions=<list of strings>. Call it only when a decision '
+                        "is genuinely at stake; skip it for routine steps.")
         return {"context": context}
     except Exception as e:
         logger.debug("nexa-kev advisory fail-open: %s", e)

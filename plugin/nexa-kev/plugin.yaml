@@ -1,5 +1,5 @@
 name: nexa-kev
-version: "0.4.0"
+version: "0.4.1"
 description: "General-purpose decision helper: the kev_decide tool sends a factual state + free-text questions to the kev gateway (/kev/systemone passthrough), grades each answer honestly (p>=0.7 SAFE/YES, p<=0.3 UNSAFE/NO, else UNCERTAIN), and degrades gracefully to NO DECISION when kev is unreachable. v0.4.0 adds the self-learning memory lanes: memlearn (kev-decided learning-moment capture + bank routing directive) and memrecall (mid-task memory recall on error tool results), public-plugin-hooks-only, per-lane kill/shadow switches. Settings via NEXA_KEV_* env vars or plugins.entries.nexa-kev in config.yaml. Standalone — no relation to hermes-kev-router."
 author: "NexaSkills"
 provides_tools:
